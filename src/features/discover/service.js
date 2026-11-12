@@ -1,0 +1,4 @@
+import { isMock } from '../../lib/config'
+import { store, clone } from '../../lib/mockData'
+export const listCampusUsers = async campus => { if (isMock('discover')) return clone(store.users.filter(x=>x.campus===campus&&x.discoverable)); throw new Error('not implemented') }
+export const getMatches = async profile => { if (isMock('discover')) { const score=(a,b)=>a.filter(x=>b.includes(x)).length; return store.users.filter(x=>x.uid!==profile.uid&&x.campus===profile.campus&&x.discoverable).map(user=>{const reasons=[]; const interest=score(profile.interests,user.interests); if(interest) reasons.push(`You both like ${profile.interests.find(x=>user.interests.includes(x))}`); const learning=profile.learn.find(x=>user.teach.includes(x)); if(learning) reasons.push(`They can teach ${learning}, which you want to learn`); return {user:clone(user),score:interest*2+(learning?3:0),reasons}}).sort((a,b)=>b.score-a.score) } throw new Error('not implemented') }

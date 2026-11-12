@@ -1,0 +1,1 @@
+export const isMock = name => { const value = import.meta.env.VITE_MOCK_SERVICES ?? 'all'; return value.split(',').map(x => x.trim()).includes('all') || value.split(',').map(x => x.trim()).includes(name) }
