@@ -1,6 +1,6 @@
-# Inkspire
+# CampusConnect
 
-Inkspire is a campus connection app built with React 18, Vite, Tailwind, React Router, Firebase SDK, and a complete in-memory mock mode.
+CampusConnect is a campus connection app built with React 18, Vite, Tailwind, React Router, Firebase SDK, and a complete in-memory mock mode.
 
 ## Setup
 

@@ -1,4 +1,27 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
-@layer base { body { @apply bg-background text-ink font-sans; } button,input,textarea,select { @apply focus:outline-none focus:ring-2 focus:ring-primary/40; } }
+@layer base { body { @apply bg-background text-ink font-sans antialiased; } button,input,textarea,select { @apply focus:outline-none focus:ring-2 focus:ring-primary/40; } ::selection { @apply bg-secondary/40 text-ink; } }
+.app-shell { background: radial-gradient(ellipse at 95% 0%, rgba(243,159,90,.09), transparent 35%), #fff8f5; }
+.brand-mark { background: linear-gradient(145deg,#451952,#6b2549 60%,#ae445a); }
+.nav-active { background: linear-gradient(105deg,rgba(232,188,185,.42),rgba(243,159,90,.12)); color:#451952; box-shadow: inset 3px 0 #ae445a; }
+.sidebar-prompt { background: linear-gradient(145deg,#451952,#6b2549 65%,#ae445a); }
+.profile-avatar { background: linear-gradient(135deg,#f39f5a,#e8bcb9); color:#451952; }
+.mobile-dock { background:rgba(255,255,255,.94); backdrop-filter:blur(18px); }
+.mobile-nav-link { color:#6b2549; }
+.mobile-nav-link.active,.mobile-nav-link[aria-current="page"] { background:#f8edee; color:#451952; }
+.discover-hero { background:linear-gradient(115deg,#1d1a39 0%,#451952 48%,#6b2549 100%); }
+.discover-orb { background:radial-gradient(circle at 35% 35%,#f39f5a,#ae445a 58%,transparent 72%); filter:blur(3px); }
+.discover-orb-two { background:radial-gradient(circle at 35% 35%,#e8bcb9,#ae445a 58%,transparent 72%); filter:blur(2px); }
+.stat-icon { background:linear-gradient(145deg,#f8edee,#ffedda); }
+.match-card { transition:transform .2s ease,box-shadow .2s ease; }
+.match-card:hover { transform:translateY(-3px); box-shadow:0 18px 40px rgba(69,25,82,.13); }
+.match-card-top { background:linear-gradient(90deg,#451952,#ae445a,#f39f5a); }
+.match-score { background:#ffedda; color:#6b2549; }
+.auth-shell { background:linear-gradient(135deg,#fff8f5,#f8edee); }
+.auth-story { background:linear-gradient(145deg,#1d1a39,#451952 58%,#6b2549); }
+.spaces-hero { background:radial-gradient(circle at 92% 10%,rgba(243,159,90,.5),transparent 26%),linear-gradient(115deg,#1d1a39,#451952 56%,#6b2549); }
+.space-card-art { background:radial-gradient(circle at 80% 15%,rgba(243,159,90,.8),transparent 30%),linear-gradient(125deg,#451952,#6b2549 60%,#ae445a); }
+.space-detail-hero { background:radial-gradient(circle at 90% 0%,rgba(243,159,90,.55),transparent 28%),linear-gradient(120deg,#1d1a39,#451952 60%,#6b2549); }
+.message-mine { background:linear-gradient(135deg,#451952,#6b2549); }
+.message-theirs { background:#f8edee; }
