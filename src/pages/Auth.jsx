@@ -6,8 +6,8 @@ import { useAuth } from '../context/AuthContext'
 
 export default function Auth({ initialMode = false }) {
   const [signup, setSignup] = useState(initialMode)
-  const [email, setEmail] = useState('u1@campusconnect.test')
-  const [password, setPassword] = useState('password')
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
   const [name, setName] = useState('')
   const [loading, setLoading] = useState(false)
   const { signIn, signUp, signInWithGoogle } = useAuth()
@@ -56,8 +56,7 @@ export default function Auth({ initialMode = false }) {
           <Button loading={loading} className="flex w-full items-center justify-center gap-2 py-3">{signup?'Create account':'Sign in'}<ArrowRight size={17}/></Button>
         </form>
         <div className="my-5 flex items-center gap-3 text-xs text-muted"><span className="h-px flex-1 bg-line"/>OR<span className="h-px flex-1 bg-line"/></div>
-        <Button variant="secondary" className="w-full py-3" onClick={demo} loading={loading}><CircleHelp className="mr-2 inline" size={17}/>Continue with demo account</Button>
-        <p className="mt-3 text-center text-xs leading-relaxed text-muted">Demo access works while Google sign-in is being set up. Your progress stays in this browser session.</p>
+        <Button variant="secondary" className="w-full py-3" onClick={demo} loading={loading}><CircleHelp className="mr-2 inline" size={17}/>Continue with Google</Button>
       </Card>
       <p className="mt-6 text-center text-sm text-muted">{signup?'Already have an account?':'New to CampusConnect?'} <Link className="font-semibold text-primary" to={signup?'/auth':'/signup'}>{signup?'Sign in':'Create an account'}</Link></p>
       <div className="mt-6 flex justify-center gap-5 text-xs text-muted"><span className="inline-flex items-center gap-1"><Check size={14}/>Free to join</span><span className="inline-flex items-center gap-1"><Check size={14}/>Campus-first</span></div>

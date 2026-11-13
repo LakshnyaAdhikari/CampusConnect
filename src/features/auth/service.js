@@ -8,6 +8,7 @@ import {
 import { auth, googleProvider } from '../../lib/firebase'
 import { isMock } from '../../lib/config'
 import { store, notify, clone, id } from '../../lib/mockData'
+import { ensureUserProfile } from '../profile/service'
 
 function formatAuthError(error) {
   const code = error?.code || ''
@@ -82,6 +83,7 @@ export const signUpEmail = async (email, password, name) => {
         // Non-fatal if display name update fails
       }
     }
+    const profile = await ensureUserProfile(cred.user)
     if (import.meta.env.DEV) {
       console.log('[Auth] signUpEmail success, uid:', cred.user.uid)
     }
@@ -101,7 +103,7 @@ export const signUpEmail = async (email, password, name) => {
       bio: '',
       discoverable: true,
       onboarded: false,
-      createdAt: Date.now()
+      ...profile
     }
   } catch (error) {
     if (import.meta.env.DEV) console.error('[Auth] signUpEmail error:', error.code, error.message)
@@ -121,6 +123,7 @@ export const signInEmail = async (email, password) => {
 
   try {
     const cred = await signInWithEmailAndPassword(auth, email, password)
+    const profile = await ensureUserProfile(cred.user)
     if (import.meta.env.DEV) {
       console.log('[Auth] signInEmail success, uid:', cred.user.uid)
     }
@@ -139,7 +142,7 @@ export const signInEmail = async (email, password) => {
       lookingFor: [],
       bio: '',
       discoverable: true,
-      onboarded: undefined  // let AuthContext localStorage cache decide; falsy → routes to /onboarding for first-time users
+      ...profile
     }
   } catch (error) {
     if (import.meta.env.DEV) console.error('[Auth] signInEmail error:', error.code, error.message)
@@ -162,6 +165,7 @@ export const signInGoogle = async () => {
     }
     const cred = await signInWithPopup(auth, googleProvider)
     const isNewUser = cred.user.metadata?.creationTime === cred.user.metadata?.lastSignInTime
+    const profile = await ensureUserProfile(cred.user)
     if (import.meta.env.DEV) {
       console.log('[Auth] signInGoogle success, uid:', cred.user.uid, 'isNewUser:', isNewUser)
     }
@@ -180,7 +184,8 @@ export const signInGoogle = async () => {
       lookingFor: [],
       bio: '',
       discoverable: true,
-      onboarded: !isNewUser
+      ...profile,
+      onboarded: profile.onboarded ?? !isNewUser
     }
   } catch (error) {
     if (import.meta.env.DEV) console.error('[Auth] signInGoogle error:', error.code, error.message)
