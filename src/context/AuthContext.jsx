@@ -4,7 +4,7 @@ import { auth } from '../lib/firebase'
 import { isMock } from '../lib/config'
 import { store, subscribe, clone } from '../lib/mockData'
 import * as authService from '../features/auth/service'
-import { getUser } from '../features/profile/service'
+import { ensureUserProfile, getUser } from '../features/profile/service'
 
 const Context = createContext(null)
 
@@ -65,7 +65,7 @@ export const AuthProvider = ({ children }) => {
         }
         setUser(u)
         try {
-          const p = await getUser(firebaseUser.uid)
+          const p = await ensureUserProfile(firebaseUser)
           setProfile(p)
           cacheProfile(p)
         } catch {

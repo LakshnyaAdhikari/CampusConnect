@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { ArrowLeft, ArrowRight, BookOpen, Check, GraduationCap, MessageCircle, Sparkles, Users, X, Zap } from 'lucide-react'
 import { Avatar, Button, Card, Input, Select, Spinner, Tag, Textarea, useToast } from '../components/ui'
-import { getUser, updateUser } from '../features/profile/service'
+import { getPublicUser, updateUser } from '../features/profile/service'
 import { openChat } from '../features/messages/service'
 import { cancelRequest, respondRequest, sendRequest } from '../features/connections/service'
 import { listSpaces } from '../features/spaces/service'
@@ -35,7 +35,7 @@ export default function Profile() {
         setLoading(false)
       }
     } else {
-      getUser(targetUid)
+      getPublicUser(targetUid)
         .then(res => {
           setP(res)
           setLoading(false)

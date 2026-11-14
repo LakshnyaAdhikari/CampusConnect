@@ -11,5 +11,41 @@ service cloud.firestore {
       allow update: if request.auth != null && request.auth.uid == uid
         && request.resource.data.role == resource.data.role;
     }
+    match /publicProfiles/{uid} {
+      function ownerCanPublish() {
+        let owner = getAfter(/databases/$(database)/documents/users/$(uid)).data;
+        return owner.onboarded == true && owner.discoverable == true;
+      }
+
+      function validPublicProfile() {
+        let data = request.resource.data;
+        return data.keys().hasOnly([
+            'uid', 'name', 'campus', 'interests', 'teach', 'learn',
+            'lookingFor', 'bio', 'photoURL', 'discoverable', 'createdAt'
+          ])
+          && data.keys().hasAll([
+            'uid', 'name', 'campus', 'interests', 'teach', 'learn',
+            'lookingFor', 'bio', 'photoURL', 'discoverable', 'createdAt'
+          ])
+          && data.uid == uid
+          && data.name is string && data.name.size() <= 80
+          && data.campus is string && data.campus.size() <= 120
+          && data.interests is list && data.interests.size() <= 40
+          && data.teach is list && data.teach.size() <= 40
+          && data.learn is list && data.learn.size() <= 40
+          && data.lookingFor is list && data.lookingFor.size() <= 20
+          && data.bio is string && data.bio.size() <= 500
+          && data.photoURL is string && data.photoURL.size() <= 2048
+          && data.discoverable == true
+          && data.createdAt is timestamp;
+      }
+
+      allow get, list: if request.auth != null && resource.data.discoverable == true;
+      allow create, update: if request.auth != null
+        && request.auth.uid == uid
+        && ownerCanPublish()
+        && validPublicProfile();
+      allow delete: if request.auth != null && request.auth.uid == uid;
+    }
   }
 }
