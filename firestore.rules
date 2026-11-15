@@ -1,51 +1,235 @@
+
 rules_version = '2';
+
 service cloud.firestore {
   match /databases/{database}/documents {
+
+    // DEFAULT DENY
     match /{document=**} {
       allow read, write: if false;
     }
+
+    // PRIVATE USER PROFILES
     match /users/{uid} {
-      allow read, delete: if request.auth != null && request.auth.uid == uid;
-      allow create: if request.auth != null && request.auth.uid == uid
+
+      allow get: if request.auth != null
+        && request.auth.uid == uid;
+
+      allow list: if false;
+
+      allow create: if request.auth != null
+        && request.auth.uid == uid
+        && request.resource.data.uid == uid
         && request.resource.data.role == 'student';
-      allow update: if request.auth != null && request.auth.uid == uid
-        && request.resource.data.role == resource.data.role;
+
+      allow update: if request.auth != null
+        && request.auth.uid == uid
+        && request.resource.data.uid == resource.data.uid
+        && request.resource.data.id == resource.data.id
+        && request.resource.data.email == resource.data.email
+        && request.resource.data.role == resource.data.role
+        && request.resource.data.createdAt == resource.data.createdAt
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'name',
+          'campus',
+          'interests',
+          'teach',
+          'learn',
+          'lookingFor',
+          'bio',
+          'photoURL',
+          'discoverable',
+          'onboarded',
+          'updatedAt'
+        ]);
+
+      allow delete: if request.auth != null
+        && request.auth.uid == uid;
     }
+
+    // PUBLIC PROFILES
     match /publicProfiles/{uid} {
+
       function ownerCanPublish() {
-        let owner = getAfter(/databases/$(database)/documents/users/$(uid)).data;
-        return owner.onboarded == true && owner.discoverable == true;
+        let userPath = /databases/$(database)/documents/users/$(uid);
+        let owner = getAfter(userPath);
+
+        return existsAfter(userPath)
+          && owner.data.get('onboarded', false) == true
+          && owner.data.get('discoverable', false) == true;
       }
 
       function validPublicProfile() {
         let data = request.resource.data;
+
         return data.keys().hasOnly([
-            'uid', 'name', 'campus', 'interests', 'teach', 'learn',
-            'lookingFor', 'bio', 'photoURL', 'discoverable', 'createdAt'
-          ])
-          && data.keys().hasAll([
-            'uid', 'name', 'campus', 'interests', 'teach', 'learn',
-            'lookingFor', 'bio', 'photoURL', 'discoverable', 'createdAt'
-          ])
-          && data.uid == uid
-          && data.name is string && data.name.size() <= 80
-          && data.campus is string && data.campus.size() <= 120
-          && data.interests is list && data.interests.size() <= 40
-          && data.teach is list && data.teach.size() <= 40
-          && data.learn is list && data.learn.size() <= 40
-          && data.lookingFor is list && data.lookingFor.size() <= 20
-          && data.bio is string && data.bio.size() <= 500
-          && data.photoURL is string && data.photoURL.size() <= 2048
-          && data.discoverable == true
-          && data.createdAt is timestamp;
+          'uid',
+          'name',
+          'campus',
+          'interests',
+          'teach',
+          'learn',
+          'lookingFor',
+          'bio',
+          'photoURL',
+          'discoverable',
+          'createdAt'
+        ])
+        && data.keys().hasAll([
+          'uid',
+          'name',
+          'campus',
+          'interests',
+          'teach',
+          'learn',
+          'lookingFor',
+          'bio',
+          'photoURL',
+          'discoverable',
+          'createdAt'
+        ])
+        && data.uid == uid
+        && data.name is string
+        && data.name.size() <= 80
+        && data.campus is string
+        && data.campus.size() <= 120
+        && data.interests is list
+        && data.interests.size() <= 40
+        && data.teach is list
+        && data.teach.size() <= 40
+        && data.learn is list
+        && data.learn.size() <= 40
+        && data.lookingFor is list
+        && data.lookingFor.size() <= 20
+        && data.bio is string
+        && data.bio.size() <= 500
+        && data.photoURL is string
+        && data.photoURL.size() <= 2048
+        && data.discoverable == true
+        && data.createdAt is timestamp;
       }
 
-      allow get, list: if request.auth != null && resource.data.discoverable == true;
-      allow create, update: if request.auth != null
+      allow get, list: if request.auth != null
+        && resource.data.discoverable == true;
+
+      allow create: if request.auth != null
         && request.auth.uid == uid
         && ownerCanPublish()
         && validPublicProfile();
-      allow delete: if request.auth != null && request.auth.uid == uid;
+
+      allow update: if request.auth != null
+        && request.auth.uid == uid
+        && ownerCanPublish()
+        && request.resource.data.uid == resource.data.uid
+        && request.resource.data.createdAt == resource.data.createdAt
+        && validPublicProfile();
+
+      allow delete: if request.auth != null
+        && request.auth.uid == uid;
+    }
+
+    // CONNECTIONS
+    match /connections/{connectionId} {
+
+      // READ ONLY BY PARTICIPANTS
+      // Allow authenticated lookup of a nonexistent document.
+      allow get: if request.auth != null
+        && (
+          resource == null
+          || request.auth.uid in resource.data.participants
+        );
+
+      // QUERY ONLY OWN CONNECTIONS
+      allow list: if request.auth != null
+        && request.auth.uid in resource.data.participants;
+
+      // CREATE CONNECTION REQUEST
+      allow create: if request.auth != null
+        && request.resource.data.keys().hasOnly([
+          'id',
+          'fromUid',
+          'toUid',
+          'participants',
+          'status',
+          'profiles',
+          'createdAt'
+        ])
+        && request.resource.data.id == connectionId
+        && (
+          connectionId ==
+            request.resource.data.fromUid + '_' +
+            request.resource.data.toUid
+          ||
+          connectionId ==
+            request.resource.data.toUid + '_' +
+            request.resource.data.fromUid
+        )
+        && request.resource.data.fromUid == request.auth.uid
+        && request.resource.data.toUid is string
+        && request.resource.data.toUid != request.auth.uid
+        && request.resource.data.participants is list
+        && request.resource.data.participants.size() == 2
+        && request.resource.data.participants.hasAll([
+          request.auth.uid,
+          request.resource.data.toUid
+        ])
+        && request.resource.data.status == 'pending'
+        && request.resource.data.createdAt is timestamp
+        && request.resource.data.profiles is map
+        && request.resource.data.profiles.keys().hasOnly([
+          request.auth.uid
+        ])
+        && request.resource.data.profiles[request.auth.uid].name is string;
+
+      // ACCEPT CONNECTION REQUEST
+      allow update: if request.auth != null
+        && request.auth.uid == resource.data.toUid
+        && resource.data.status == 'pending'
+        && request.resource.data.status == 'accepted'
+
+        // PREVENT CHANGING CONNECTION IDENTITY
+        && request.resource.data.fromUid == resource.data.fromUid
+        && request.resource.data.toUid == resource.data.toUid
+        && request.resource.data.participants == resource.data.participants
+        && request.resource.data.id == resource.data.id
+        && request.resource.data.createdAt == resource.data.createdAt
+
+        // ONLY PERMITTED FIELDS CAN CHANGE
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'status',
+          'profiles',
+          'updatedAt'
+        ])
+        && request.resource.data.updatedAt is timestamp
+        && request.resource.data.profiles is map
+        && request.resource.data.profiles.keys().hasAll([
+          resource.data.fromUid,
+          resource.data.toUid
+        ])
+        && request.resource.data.profiles.keys().hasOnly([
+          resource.data.fromUid,
+          resource.data.toUid
+        ])
+
+        // PRESERVE SENDER'S ORIGINAL PROFILE
+        && request.resource.data.profiles[resource.data.fromUid]
+          == resource.data.profiles[resource.data.fromUid]
+        && request.resource.data.profiles[resource.data.toUid].name is string;
+
+      // CANCEL, REJECT OR REMOVE CONNECTION
+      allow delete: if request.auth != null
+        && request.auth.uid in resource.data.participants
+        && (
+          (
+            resource.data.status == 'pending'
+            && (
+              request.auth.uid == resource.data.fromUid
+              || request.auth.uid == resource.data.toUid
+            )
+          )
+          ||
+          resource.data.status == 'accepted'
+        );
     }
   }
 }
