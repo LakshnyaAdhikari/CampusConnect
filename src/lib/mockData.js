@@ -77,10 +77,11 @@ export const store = {
     {
       id:'space1',
       name:'Design Circle',
+      category:'Design & Creative',
       description:'A friendly home for designers, UI/UX thinkers, and curious makers.',
       campus:'North Campus',
       createdBy:'u5',
-      memberCount:8,
+      memberCount:142,
       createdAt:now,
       members:['u1','u3','u5','u8','u9','u13','u17','u19'],
       posts:[
@@ -89,7 +90,7 @@ export const store = {
           authorName:'Nisha Kumar',
           authorUid:'u5',
           isAnonymous:false,
-          text:'Anyone up for a UI critique this Friday?',
+          text:'Anyone up for a late-night Figma jam this Friday?',
           createdAt:now-3600000,
           comments:[{id:'c1',authorName:'Aanya Shah',authorUid:'u1',isAnonymous:false,text:'I would love to join!',createdAt:now-3500000}]
         },
@@ -106,10 +107,11 @@ export const store = {
     {
       id:'space2',
       name:'Study Sprint',
+      category:'Study & Exams',
       description:'Quiet accountability, shared focus blocks, and practical study help.',
       campus:'North Campus',
       createdBy:'u2',
-      memberCount:8,
+      memberCount:89,
       createdAt:now,
       members:['u1','u2','u6','u7','u10','u12','u15','u18'],
       posts:[
@@ -118,44 +120,141 @@ export const store = {
           authorName:'Rohan Mehta',
           authorUid:'u2',
           isAnonymous:false,
-          text:'Python study session at 5?',
+          text:'Python & DSA study session in the library at 5 PM?',
           createdAt:now-1800000,
-          comments:[]
+          comments:[{id:'c2',authorName:'Aanya Shah',authorUid:'u1',isAnonymous:false,text:'Count me in!',createdAt:now-1500000}]
         }
       ]
     },
     {
       id:'space3',
       name:'Late Night Coders',
+      category:'Tech & Coding',
       description:'Collaborative coding sessions, hackathon project ideation, and tech talks.',
       campus:'North Campus',
       createdBy:'u2',
-      memberCount:10,
+      memberCount:115,
       createdAt:now,
       members:['u1','u2','u5','u6','u10','u12','u14','u17','u20','admin1'],
-      posts:[]
+      posts:[
+        {
+          id:'p4',
+          authorName:'Rohan Mehta',
+          authorUid:'u2',
+          isAnonymous:false,
+          text:'Building a local RAG assistant tonight. Anyone want to hop on Discord?',
+          createdAt:now-5400000,
+          comments:[]
+        }
+      ]
     },
     {
       id:'space4',
-      name:'Campus Film & Arts Society',
-      description:'Screenings, zine production, visual storytelling, and student showcases.',
-      campus:'South Campus',
+      name:'Campus Photography & Film',
+      category:'Design & Creative',
+      description:'Photowalks, camera gear banter, zines, and student cinematic showcases.',
+      campus:'North Campus',
       createdBy:'u3',
-      memberCount:8,
+      memberCount:76,
       createdAt:now,
       members:['u3','u4','u5','u8','u11','u13','u16','u19'],
-      posts:[]
+      posts:[
+        {
+          id:'p5',
+          authorName:'Maya Iyer',
+          authorUid:'u3',
+          isAnonymous:false,
+          text:'Golden hour photowalk around North Campus quad tomorrow 5:30 PM! Bring any camera or phone.',
+          createdAt:now-7200000,
+          comments:[]
+        }
+      ]
     },
     {
       id:'space5',
-      name:'Campus Founders & Builders',
-      description:'For students launching side-projects, indie apps, content, and campus ventures.',
+      name:'AI & Builders Club',
+      category:'Tech & Coding',
+      description:'For students training models, tinkering with local LLMs, and shipping AI apps.',
       campus:'North Campus',
       createdBy:'u12',
-      memberCount:9,
+      memberCount:98,
       createdAt:now,
       members:['u1','u2','u7','u9','u12','u14','u17','u20','mod1'],
-      posts:[]
+      posts:[
+        {
+          id:'p6',
+          authorName:'Anonymous',
+          isAnonymous:true,
+          text:'Just fine-tuned DeepSeek on our campus syllabus notes. Demo dropping soon!',
+          createdAt:now-2400000,
+          comments:[{id:'c3',authorName:'Rohan Mehta',authorUid:'u2',isAnonymous:false,text:'This is insane, let me test it',createdAt:now-2000000}]
+        }
+      ]
+    },
+    {
+      id:'space6',
+      name:'Hackathon Squad Finder',
+      category:'Tech & Coding',
+      description:'Find your frontend, backend, or pitch partners for upcoming collegiate hackathons.',
+      campus:'North Campus',
+      createdBy:'u1',
+      memberCount:134,
+      createdAt:now,
+      members:['u1','u2','u3','u6','u10','u15'],
+      posts:[
+        {
+          id:'p7',
+          authorName:'Aanya Shah',
+          authorUid:'u1',
+          isAnonymous:false,
+          text:'Looking for a UI designer and backend developer for HackCampus 2026!',
+          createdAt:now-1200000,
+          comments:[]
+        }
+      ]
+    },
+    {
+      id:'space7',
+      name:'Midnight Rants & Confessions',
+      category:'Campus Life',
+      description:'A safe, anonymous outlet to vent about exams, dorm food, and campus quirks.',
+      campus:'North Campus',
+      createdBy:'u7',
+      memberCount:210,
+      createdAt:now,
+      members:['u2','u4','u7','u11','u18'],
+      posts:[
+        {
+          id:'p8',
+          authorName:'Anonymous',
+          isAnonymous:true,
+          text:'Can someone please explain why the cafeteria coffee tastes like burnt charcoal today?',
+          createdAt:now-900000,
+          comments:[{id:'c4',authorName:'Anonymous',isAnonymous:true,text:'Always has been...',createdAt:now-600000}]
+        }
+      ]
+    },
+    {
+      id:'space8',
+      name:'Placement Prep 2027',
+      category:'Study & Exams',
+      description:'DSA roadmaps, mock interview pairs, resume reviews, and internship referrals.',
+      campus:'North Campus',
+      createdBy:'u6',
+      memberCount:164,
+      createdAt:now,
+      members:['u1','u6','u8','u12','u16','u19'],
+      posts:[
+        {
+          id:'p9',
+          authorName:'Priya Das',
+          authorUid:'u6',
+          isAnonymous:false,
+          text:'Hosting a 45-minute NeetCode 150 mock problem session this evening!',
+          createdAt:now-3000000,
+          comments:[]
+        }
+      ]
     }
   ],
   reports:[
