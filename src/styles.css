@@ -1,10 +1,127 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
-@layer base { body { @apply bg-background text-ink font-sans antialiased; } button,input,textarea,select { @apply focus:outline-none focus:ring-2 focus:ring-primary/40; } ::selection { @apply bg-secondary/40 text-ink; } }
-.app-shell { background: radial-gradient(ellipse at 95% 0%, rgba(243,159,90,.09), transparent 35%), #fff8f5; }
+@layer base {
+  body {
+    @apply bg-background text-ink font-sans antialiased transition-colors duration-200;
+  }
+  button,input,textarea,select {
+    @apply focus:outline-none focus:ring-2 focus:ring-primary/40;
+  }
+  ::selection {
+    @apply bg-secondary/40 text-ink;
+  }
+  html.dark {
+    color-scheme: dark;
+  }
+  html.dark body {
+    background-color: #121217;
+    color: #F4F4F6;
+  }
+}
+
+.app-shell {
+  background: radial-gradient(ellipse at 95% 0%, rgba(243,159,90,.09), transparent 35%), #fff8f5;
+}
+html.dark .app-shell {
+  background: #121217;
+}
+
+html.dark .bg-surface {
+  background-color: #1A1A22;
+  color: #F4F4F6;
+}
+
+html.dark .bg-background {
+  background-color: #121217;
+  color: #F4F4F6;
+}
+
+html.dark .border-line,
+html.dark .border-line\/80,
+html.dark .border-line\/70,
+html.dark .border-line\/60,
+html.dark .border-line\/40,
+html.dark .border-line\/30 {
+  border-color: #2E2E3A;
+}
+
+html.dark .text-ink,
+html.dark .text-\[\#1D1A39\] {
+  color: #F4F4F6;
+}
+
+html.dark .text-muted,
+html.dark .text-white\/75,
+html.dark .text-white\/80 {
+  color: #A1A1B0;
+}
+
+html.dark aside {
+  background-color: #1A1A22;
+  border-color: #2E2E3A;
+}
+
+html.dark header.app-topbar {
+  background-color: #1A1A22;
+  border-color: #2E2E3A;
+}
+
+html.dark .mobile-dock {
+  background: rgba(26,26,34,.96);
+  border-color: #2E2E3A;
+}
+
+html.dark .mobile-nav-link {
+  color: #A1A1B0;
+}
+
+html.dark .mobile-nav-link.active,
+html.dark .mobile-nav-link[aria-current="page"] {
+  background: #23232E;
+  color: #F4F4F6;
+}
+
+html.dark .nav-active {
+  background: #23232E;
+  color: #F4F4F6;
+  box-shadow: inset 3px 0 #E59858;
+}
+
+html.dark input,
+html.dark textarea,
+html.dark select {
+  background-color: #23232E;
+  border-color: #2E2E3A;
+  color: #F4F4F6;
+}
+
+html.dark input::placeholder,
+html.dark textarea::placeholder {
+  color: #717182;
+}
+
+html.dark .stat-icon {
+  background: #23232E;
+  color: #F4F4F6;
+}
+
+html.dark .match-score {
+  background: #23232E;
+  color: #E59858;
+}
+
+html.dark .message-mine {
+  background: #9E3B50;
+  color: #F4F4F6;
+}
+
+html.dark .message-theirs {
+  background: #23232E;
+  color: #F4F4F6;
+}
+
 .brand-mark { background: linear-gradient(145deg,#451952,#6b2549 60%,#ae445a); }
-.nav-active { background: linear-gradient(105deg,rgba(232,188,185,.42),rgba(243,159,90,.12)); color:#451952; box-shadow: inset 3px 0 #ae445a; }
 .sidebar-prompt { background: linear-gradient(145deg,#451952,#6b2549 65%,#ae445a); }
 .profile-avatar { background: linear-gradient(135deg,#f39f5a,#e8bcb9); color:#451952; }
 .mobile-dock { background:rgba(255,255,255,.94); backdrop-filter:blur(18px); }
