@@ -1,0 +1,544 @@
+
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ==========================================
+    // DEFAULT DENY
+    // ==========================================
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // ==========================================
+    // PRIVATE USER PROFILES
+    // ==========================================
+
+    match /users/{uid} {
+
+      allow get: if request.auth != null
+        && request.auth.uid == uid;
+
+      allow list: if false;
+
+      allow create: if request.auth != null
+        && request.auth.uid == uid
+        && request.resource.data.uid == uid
+        && request.resource.data.role == 'student';
+
+      allow update: if request.auth != null
+        && request.auth.uid == uid
+        && request.resource.data.uid == resource.data.uid
+        && request.resource.data.id == resource.data.id
+        && request.resource.data.email == resource.data.email
+        && request.resource.data.role == resource.data.role
+        && request.resource.data.createdAt == resource.data.createdAt
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'name',
+          'campus',
+          'interests',
+          'teach',
+          'learn',
+          'lookingFor',
+          'bio',
+          'photoURL',
+          'discoverable',
+          'onboarded',
+          'updatedAt'
+        ]);
+
+      allow delete: if request.auth != null
+        && request.auth.uid == uid;
+    }
+
+    // ==========================================
+    // PUBLIC PROFILES
+    // ==========================================
+
+    match /publicProfiles/{uid} {
+
+      function ownerCanPublish() {
+        let userPath = /databases/$(database)/documents/users/$(uid);
+        let owner = getAfter(userPath);
+
+        return existsAfter(userPath)
+          && owner.data.get('onboarded', false) == true
+          && owner.data.get('discoverable', false) == true;
+      }
+
+      function validPublicProfile() {
+        let data = request.resource.data;
+
+        return data.keys().hasOnly([
+          'uid',
+          'name',
+          'campus',
+          'interests',
+          'teach',
+          'learn',
+          'lookingFor',
+          'bio',
+          'photoURL',
+          'discoverable',
+          'createdAt'
+        ])
+        && data.keys().hasAll([
+          'uid',
+          'name',
+          'campus',
+          'interests',
+          'teach',
+          'learn',
+          'lookingFor',
+          'bio',
+          'photoURL',
+          'discoverable',
+          'createdAt'
+        ])
+        && data.uid == uid
+        && data.name is string
+        && data.name.size() <= 80
+        && data.campus is string
+        && data.campus.size() <= 120
+        && data.interests is list
+        && data.interests.size() <= 40
+        && data.teach is list
+        && data.teach.size() <= 40
+        && data.learn is list
+        && data.learn.size() <= 40
+        && data.lookingFor is list
+        && data.lookingFor.size() <= 20
+        && data.bio is string
+        && data.bio.size() <= 500
+        && data.photoURL is string
+        && data.photoURL.size() <= 2048
+        && data.discoverable == true
+        && data.createdAt is timestamp;
+      }
+
+      allow get, list: if request.auth != null
+        && resource.data.discoverable == true;
+
+      allow create: if request.auth != null
+        && request.auth.uid == uid
+        && ownerCanPublish()
+        && validPublicProfile();
+
+      allow update: if request.auth != null
+        && request.auth.uid == uid
+        && ownerCanPublish()
+        && request.resource.data.uid == resource.data.uid
+        && request.resource.data.createdAt == resource.data.createdAt
+        && validPublicProfile();
+
+      allow delete: if request.auth != null
+        && request.auth.uid == uid;
+    }
+
+    // ==========================================
+    // CONNECTIONS
+    // ==========================================
+
+    match /connections/{connectionId} {
+
+      // READ ONLY BY PARTICIPANTS
+      allow get: if request.auth != null
+        && (
+          resource == null
+          || request.auth.uid in resource.data.participants
+        );
+
+      // QUERY ONLY OWN CONNECTIONS
+      allow list: if request.auth != null
+        && request.auth.uid in resource.data.participants;
+
+      // CREATE CONNECTION REQUEST
+      allow create: if request.auth != null
+        && request.resource.data.keys().hasOnly([
+          'id',
+          'fromUid',
+          'toUid',
+          'participants',
+          'status',
+          'profiles',
+          'createdAt'
+        ])
+        && request.resource.data.id == connectionId
+        && (
+          connectionId ==
+            request.resource.data.fromUid + '_' +
+            request.resource.data.toUid
+          ||
+          connectionId ==
+            request.resource.data.toUid + '_' +
+            request.resource.data.fromUid
+        )
+        && request.resource.data.fromUid == request.auth.uid
+        && request.resource.data.toUid is string
+        && request.resource.data.toUid != request.auth.uid
+        && request.resource.data.participants is list
+        && request.resource.data.participants.size() == 2
+        && request.resource.data.participants.hasAll([
+          request.auth.uid,
+          request.resource.data.toUid
+        ])
+        && request.resource.data.status == 'pending'
+        && request.resource.data.createdAt is timestamp
+        && request.resource.data.profiles is map
+        && request.resource.data.profiles.keys().hasOnly([
+          request.auth.uid
+        ])
+        && request.resource.data.profiles[request.auth.uid].name is string;
+
+      // ACCEPT CONNECTION REQUEST
+      allow update: if request.auth != null
+        && request.auth.uid == resource.data.toUid
+        && resource.data.status == 'pending'
+        && request.resource.data.status == 'accepted'
+        && request.resource.data.fromUid == resource.data.fromUid
+        && request.resource.data.toUid == resource.data.toUid
+        && request.resource.data.participants == resource.data.participants
+        && request.resource.data.id == resource.data.id
+        && request.resource.data.createdAt == resource.data.createdAt
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'status',
+          'profiles',
+          'updatedAt'
+        ])
+        && request.resource.data.updatedAt is timestamp
+        && request.resource.data.profiles is map
+        && request.resource.data.profiles.keys().hasAll([
+          resource.data.fromUid,
+          resource.data.toUid
+        ])
+        && request.resource.data.profiles.keys().hasOnly([
+          resource.data.fromUid,
+          resource.data.toUid
+        ])
+        && request.resource.data.profiles[resource.data.fromUid]
+          == resource.data.profiles[resource.data.fromUid]
+        && request.resource.data.profiles[resource.data.toUid].name is string;
+
+      // CANCEL, REJECT OR REMOVE CONNECTION
+      allow delete: if request.auth != null
+        && request.auth.uid in resource.data.participants
+        && (
+          (
+            resource.data.status == 'pending'
+            && (
+              request.auth.uid == resource.data.fromUid
+              || request.auth.uid == resource.data.toUid
+            )
+          )
+          ||
+          resource.data.status == 'accepted'
+        );
+    }
+
+    // ==========================================
+    // CHATS
+    // ==========================================
+
+    match /chats/{chatId} {
+
+      function isParticipant() {
+        return request.auth != null
+          && request.auth.uid in resource.data.participants;
+      }
+
+      function validAcceptedConnection(otherUid) {
+        let connectionId = request.auth.uid < otherUid
+          ? request.auth.uid + '_' + otherUid
+          : otherUid + '_' + request.auth.uid;
+
+        let connectionPath =
+          /databases/$(database)/documents/connections/$(connectionId);
+
+        return exists(connectionPath)
+          && get(connectionPath).data.status == 'accepted'
+          && get(connectionPath).data.participants.hasAll([
+            request.auth.uid,
+            otherUid
+          ]);
+      }
+
+      // READ EXISTING CHATS; ALLOW CHECKING A MISSING CHAT
+      allow get: if request.auth != null
+        && (
+          resource == null
+          || request.auth.uid in resource.data.participants
+        );
+
+      // QUERY ONLY OWN CONVERSATIONS
+      allow list: if isParticipant();
+
+      // CREATE CHAT ONLY BETWEEN ACCEPTED CONNECTIONS
+      allow create: if request.auth != null
+        && request.resource.data.keys().hasOnly([
+          'id',
+          'participants',
+          'lastMessage',
+          'createdAt',
+          'updatedAt'
+        ])
+        && request.resource.data.id == chatId
+        && request.resource.data.participants is list
+        && request.resource.data.participants.size() == 2
+        && request.resource.data.participants[0] != request.resource.data.participants[1]
+        && request.auth.uid in request.resource.data.participants
+        && request.resource.data.lastMessage is string
+        && request.resource.data.lastMessage == ''
+        && request.resource.data.createdAt is timestamp
+        && request.resource.data.updatedAt is timestamp
+        && validAcceptedConnection(
+          request.resource.data.participants[0] == request.auth.uid
+            ? request.resource.data.participants[1]
+            : request.resource.data.participants[0]
+        );
+
+      // UPDATE ONLY CONVERSATION METADATA
+      allow update: if isParticipant()
+        && request.resource.data.id == resource.data.id
+        && request.resource.data.participants == resource.data.participants
+        && request.resource.data.createdAt == resource.data.createdAt
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'lastMessage',
+          'updatedAt'
+        ])
+        && request.resource.data.lastMessage is string
+        && request.resource.data.lastMessage.size() <= 5000
+        && request.resource.data.updatedAt is timestamp;
+
+      // NO CHAT DELETION
+      allow delete: if false;
+
+      // ========================================
+      // INDIVIDUAL MESSAGES
+      // ========================================
+
+      match /messages/{messageId} {
+
+        function chatParticipant() {
+          let chatPath =
+            /databases/$(database)/documents/chats/$(chatId);
+
+          return request.auth != null
+            && exists(chatPath)
+            && request.auth.uid in get(chatPath).data.participants;
+        }
+
+        // READ MESSAGES ONLY BY CHAT PARTICIPANTS
+        allow get, list: if chatParticipant();
+
+        // SEND MESSAGE
+        allow create: if chatParticipant()
+          && request.resource.data.keys().hasOnly([
+            'id',
+            'senderUid',
+            'text',
+            'createdAt'
+          ])
+          && request.resource.data.id == messageId
+          && request.resource.data.senderUid == request.auth.uid
+          && request.resource.data.text is string
+          && request.resource.data.text.size() > 0
+          && request.resource.data.text.size() <= 5000
+          && request.resource.data.createdAt is timestamp;
+
+        // NO EDITING OR DELETING MESSAGES
+        allow update, delete: if false;
+      }
+    }
+    // Test-only copy of firestore.rules.spaces-proposed.
+    match /spaces/{spaceId} {
+      function signedIn() {
+        return request.auth != null;
+      }
+
+      function userPath() {
+        return /databases/$(database)/documents/users/$(request.auth.uid);
+      }
+
+      function spacePath() {
+        return /databases/$(database)/documents/spaces/$(spaceId);
+      }
+
+      function postPath(postId) {
+        return /databases/$(database)/documents/spaces/$(spaceId)/posts/$(postId);
+      }
+
+      function isStaff() {
+        return signedIn()
+          && exists(userPath())
+          && get(userPath()).data.role in ['admin', 'moderator'];
+      }
+
+      function isSameCampus() {
+        return signedIn()
+          && exists(userPath())
+          && exists(spacePath())
+          && get(userPath()).data.get('campus', '') == get(spacePath()).data.campus;
+      }
+
+      function isMember() {
+        return signedIn()
+          && exists(spacePath())
+          && request.auth.uid in get(spacePath()).data.members;
+      }
+
+      function canReadSpace() {
+        return isSameCampus() || isMember() || isStaff();
+      }
+
+      function isUniqueList(values) {
+        return values is list && values.toSet().size() == values.size();
+      }
+
+      function validAuthorName() {
+        let authorPath = userPath();
+        return exists(authorPath)
+          && get(authorPath).data.name is string
+          && get(authorPath).data.name.size() > 0
+          && get(authorPath).data.name.size() <= 80
+          && request.resource.data.authorName == get(authorPath).data.name;
+      }
+
+      function validAuthorFields() {
+        return (
+          request.resource.data.isAnonymous == true
+          && request.resource.data.authorName == 'Anonymous'
+          && !('authorUid' in request.resource.data)
+        ) || (
+          request.resource.data.isAnonymous == false
+          && request.resource.data.authorUid == request.auth.uid
+          && validAuthorName()
+        );
+      }
+
+      function isJoin() {
+        return isSameCampus()
+          && request.resource.data.members.toSet().size() == resource.data.members.toSet().size() + 1
+          && request.resource.data.members.hasAll(resource.data.members)
+          && !(request.auth.uid in resource.data.members)
+          && request.auth.uid in request.resource.data.members;
+      }
+
+      function isLeave() {
+        return request.resource.data.members.toSet().size() == resource.data.members.toSet().size() - 1
+          && resource.data.members.hasAll(request.resource.data.members)
+          && request.auth.uid in resource.data.members
+          && !(request.auth.uid in request.resource.data.members);
+      }
+
+      function isMembershipRepair() {
+        return request.resource.data.members.toSet() == resource.data.members.toSet()
+          && request.resource.data.members.size() == resource.data.members.toSet().size();
+      }
+
+      allow get: if canReadSpace();
+      allow list: if signedIn()
+          && exists(userPath())
+          && get(userPath()).data.get('campus', '') == resource.data.campus
+        || isStaff();
+
+      allow create: if signedIn()
+        && exists(userPath())
+        && request.resource.data.keys().hasOnly([
+          'name', 'description', 'category', 'campus', 'createdBy',
+          'members', 'memberCount', 'createdAt'
+        ])
+        && request.resource.data.keys().hasAll([
+          'name', 'description', 'category', 'campus', 'createdBy',
+          'members', 'memberCount', 'createdAt'
+        ])
+        && request.resource.data.name is string
+        && request.resource.data.name.size() > 0
+        && request.resource.data.name.size() <= 100
+        && request.resource.data.description is string
+        && request.resource.data.description.size() <= 2000
+        && request.resource.data.category is string
+        && request.resource.data.campus is string
+        && request.resource.data.campus.size() > 0
+        && request.resource.data.campus == get(userPath()).data.campus
+        && request.resource.data.createdBy == request.auth.uid
+        && request.resource.data.members == [request.auth.uid]
+        && request.resource.data.memberCount == 1
+        && request.resource.data.createdAt is timestamp;
+
+      // The members array is the membership source of truth. Set sizes prevent
+      // duplicate UIDs; updates add/remove the caller or repair duplicates without
+      // changing the set of actual members.
+      allow update: if signedIn()
+        && canReadSpace()
+        && resource.data.members is list
+        && request.resource.data.members is list
+        && isUniqueList(request.resource.data.members)
+        && request.resource.data.memberCount == request.resource.data.members.size()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['members', 'memberCount'])
+        && (isJoin() || isLeave() || isMembershipRepair());
+
+      allow delete: if false;
+
+      match /posts/{postId} {
+        // Same-campus users, existing members, and staff can read this feed.
+        allow get, list: if canReadSpace();
+
+        allow create: if isMember()
+          && request.resource.data.keys().hasOnly([
+            'authorName', 'authorUid', 'isAnonymous', 'text', 'createdAt'
+          ])
+          && request.resource.data.keys().hasAll([
+            'authorName', 'isAnonymous', 'text', 'createdAt'
+          ])
+          && request.resource.data.authorName is string
+          && request.resource.data.authorName.size() <= 80
+          && request.resource.data.isAnonymous is bool
+          && request.resource.data.text is string
+          && request.resource.data.text.size() > 0
+          && request.resource.data.text.size() <= 5000
+          && request.resource.data.createdAt is timestamp
+          && validAuthorFields();
+
+        allow update: if false;
+        allow delete: if signedIn()
+          && (resource.data.authorUid == request.auth.uid || isStaff());
+
+        match /comments/{commentId} {
+          function parentPostExists() {
+            return exists(postPath(postId));
+          }
+
+          // Orphan comments are visible only to staff for trusted cleanup.
+          allow get, list: if (parentPostExists() && canReadSpace())
+            || (!parentPostExists() && isStaff() && exists(spacePath()));
+
+          allow create: if isMember()
+            && parentPostExists()
+            && request.resource.data.keys().hasOnly([
+              'authorName', 'authorUid', 'isAnonymous', 'text', 'createdAt'
+            ])
+            && request.resource.data.keys().hasAll([
+              'authorName', 'isAnonymous', 'text', 'createdAt'
+            ])
+            && request.resource.data.authorName is string
+            && request.resource.data.authorName.size() <= 80
+            && request.resource.data.isAnonymous is bool
+            && request.resource.data.text is string
+            && request.resource.data.text.size() > 0
+            && request.resource.data.text.size() <= 2000
+            && request.resource.data.createdAt is timestamp
+            && validAuthorFields();
+
+          allow update: if false;
+          allow delete: if signedIn()
+            && (
+              (parentPostExists() && (resource.data.authorUid == request.auth.uid || isStaff()))
+              || (!parentPostExists() && isStaff())
+            );
+        }
+      }
+    }
+  }
+}

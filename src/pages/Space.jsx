@@ -2,7 +2,7 @@ import { useEffect,useState } from 'react'
 import { ArrowLeft, MessageCircle, Send, ShieldCheck, Sparkles } from 'lucide-react'
 import { Link, useParams } from 'react-router-dom'
 import { Button,Card,EmptyState,Input,Spinner,Textarea,useToast } from '../components/ui'
-import { listSpaces,listenPosts,createPost,addComment,deletePost,deleteComment } from '../features/spaces/service'
+import { getSpace,listenSpace,listenPosts,createPost,addComment,deletePost,deleteComment } from '../features/spaces/service'
 import { useAuth } from '../context/AuthContext'
 import { ReportButton } from '../features/admin/components/ReportButton'
 
@@ -18,12 +18,36 @@ export default function Space(){
   const toast=useToast()
   useEffect(()=>{
     let active=true
+    let unsubscribeSpace=()=>{}
+    let unsubscribePosts=()=>{}
+    let missing=false
+    setSpace(null)
+    setPosts([])
     setLoading(true)
     setError('')
-    listSpaces(profile.campus).then(spaces=>{if(active){setSpace(spaces.find(item=>item.id===id)||null);setLoading(false)}}).catch(()=>{if(active){setError('This space could not be loaded.');setLoading(false)}})
-    const unsubscribe=listenPosts(id,setPosts)
-    return()=>{active=false;unsubscribe?.()}
-  },[id,profile.campus])
+    getSpace(id).then(result=>{
+      if(!active)return
+      setSpace(result)
+      unsubscribeSpace=listenSpace(id,liveSpace=>{
+        if(!active)return
+        if(!liveSpace){
+          missing=true
+          setSpace(null)
+          setPosts([])
+          setError('This space is no longer available.')
+          setLoading(false)
+          unsubscribePosts()
+          unsubscribeSpace()
+          return
+        }
+        setSpace(liveSpace)
+      })
+      if(active&&!missing)unsubscribePosts=listenPosts(id,setPosts)
+      else unsubscribeSpace()
+      setLoading(false)
+    }).catch(()=>{unsubscribeSpace?.();unsubscribePosts?.();if(active){setSpace(null);setPosts([]);setError('This space could not be loaded.');setLoading(false)}})
+    return()=>{active=false;unsubscribeSpace?.();unsubscribePosts?.()}
+  },[id])
   const publish=async()=>{if(!text.trim())return;try{await createPost(id,{text:text.trim(),isAnonymous:anon});setText('');toast('Post shared with the space')}catch(reason){toast(reason.message||'Could not publish post','error')}}
   if(loading)return <Spinner/>
   if(error)return <Card className="text-center"><p className="text-muted">{error}</p><Link className="mt-4 inline-block font-semibold text-primary" to="/spaces">Back to spaces</Link></Card>
