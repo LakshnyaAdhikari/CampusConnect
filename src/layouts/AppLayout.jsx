@@ -3,6 +3,7 @@ import { NavLink, Outlet, useNavigate } from 'react-router-dom'
 import { Compass, Users, MessageCircle, Sparkles, Shield, Settings, GraduationCap, LogOut, Network, Bell } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { usePendingCount } from '../features/connections/hooks'
+import { listenNotifications } from '../features/notifications/service'
 import { store, notify } from '../lib/mockData'
 import { isMock } from '../lib/config'
 
@@ -18,10 +19,30 @@ const links = [
 export default function AppLayout(){
   const {user, profile, role, signOut} = useAuth()
   const count = usePendingCount()
+  const [unreadNotifications, setUnreadNotifications] = useState(0)
   const nav = useNavigate()
   const rows = [...links, ...(role === 'admin' || role === 'moderator' ? [['/admin','Admin',Shield,'Community care']] : [])]
   const logout = async()=>{await signOut();nav('/')}
   const userProfileUid = user?.uid || profile?.uid || 'me'
+
+  useEffect(() => {
+    if (!user?.uid) {
+      setUnreadNotifications(0)
+      return undefined
+    }
+    try {
+      return listenNotifications(user.uid, items => {
+        setUnreadNotifications(items.filter(item => !item.read).length)
+      }, error => {
+        console.error('Could not update notification count:', error)
+        setUnreadNotifications(0)
+      })
+    } catch (error) {
+      console.error('Could not subscribe to notification count:', error)
+      setUnreadNotifications(0)
+      return undefined
+    }
+  }, [user?.uid])
 
   useEffect(() => {
     const savedTheme = localStorage.getItem('cc_theme')
@@ -80,7 +101,7 @@ export default function AppLayout(){
         </div>
 
         <div className="flex-1 overflow-y-auto pr-1">
-          <Nav rows={rows} count={count}/>
+          <Nav rows={rows} count={count} unreadNotifications={unreadNotifications}/>
         </div>
       </aside>
 
@@ -96,7 +117,7 @@ export default function AppLayout(){
       </div>
 
       <nav className="mobile-dock fixed inset-x-3 bottom-3 z-30 flex justify-around rounded-2xl border border-line/80 p-2 shadow-card md:hidden">
-        <Nav rows={rows} count={count} mobile/>
+        <Nav rows={rows} count={count} unreadNotifications={unreadNotifications} mobile/>
       </nav>
     </div>
   )
@@ -111,7 +132,7 @@ function NavHeader({compact=false}){
   )
 }
 
-function Nav({rows, count, mobile=false}){
+function Nav({rows, count, unreadNotifications, mobile=false}){
   return (
     <div className={mobile ? 'flex w-full justify-around' : 'space-y-1.5'}>
       {rows.map(([to, label, Icon, subtitle, tag]) => (
@@ -120,7 +141,7 @@ function Nav({rows, count, mobile=false}){
             <span className="relative grid h-9 w-9 shrink-0 place-items-center rounded-xl">
               <Icon size={20}/>
               {label==='Connections' && count>0 && <b className="absolute -right-1 -top-1 grid h-4 min-w-4 place-items-center rounded-full bg-apricot px-1 text-[10px] text-primary">{count}</b>}
-              {label==='Notifications' && <b className="absolute -right-0.5 -top-0.5 grid h-2.5 w-2.5 place-items-center rounded-full bg-[#9E3B50]"></b>}
+              {label==='Notifications' && unreadNotifications>0 && <b className="absolute -right-2 -top-1 grid min-h-4 min-w-4 place-items-center rounded-full bg-[#9E3B50] px-1 text-[9px] font-bold text-white">{unreadNotifications>99?'99+':unreadNotifications}</b>}
             </span>
             {mobile ? (
               <span className="truncate">{label}</span>

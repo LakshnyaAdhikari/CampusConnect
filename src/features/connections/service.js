@@ -5,6 +5,7 @@ import { auth, db } from '../../lib/firebase'
 import {
   collection,
   doc,
+  getDoc,
   query,
   where,
   onSnapshot,
@@ -41,6 +42,31 @@ const resolveTargetUid = (currentUid, toUid, maybeTarget) => {
     if (maybeTarget === currentUid) return toUid
   }
   return toUid
+}
+
+export const getConnectionStatus = async otherUid => {
+  if (!otherUid || typeof otherUid !== 'string' || !otherUid.trim()) {
+    throw new Error('A valid user ID is required.')
+  }
+  const targetUid = otherUid.trim()
+
+  if (isMock('connections')) {
+    const currentUid = getMockUid()
+    if (targetUid === currentUid) throw new Error('Cannot check a connection with yourself.')
+    const connection = store.connections.find(item => item.id === pairId(currentUid, targetUid))
+    return connection?.status || null
+  }
+
+  const firestore = getDb()
+  const currentUid = getAuthUid()
+  if (targetUid === currentUid) throw new Error('Cannot check a connection with yourself.')
+  const snapshot = await getDoc(doc(firestore, 'connections', pairId(currentUid, targetUid)))
+  if (!snapshot.exists()) return null
+  const connection = snapshot.data()
+  if (!Array.isArray(connection.participants) || !connection.participants.includes(currentUid)) {
+    throw new Error('Unauthorized: You are not a participant in this connection.')
+  }
+  return connection.status || null
 }
 
 export const sendRequest = async (toUid, maybeTarget) => {
@@ -97,6 +123,7 @@ export const sendRequest = async (toUid, maybeTarget) => {
   const connId = pairId(currentUid, recipient)
   const connRef = doc(firestore, 'connections', connId)
   const userRef = doc(firestore, 'users', currentUid)
+  const notificationRef = doc(collection(firestore, 'notifications'))
 
   return await runTransaction(firestore, async transaction => {
     const connSnap = await transaction.get(connRef)
@@ -109,13 +136,8 @@ export const sendRequest = async (toUid, maybeTarget) => {
     }
 
     const userSnap = await transaction.get(userRef)
-    let senderName = auth?.currentUser?.displayName || 'Student'
-    if (userSnap.exists()) {
-      const userData = userSnap.data()
-      if (userData?.name?.trim()) {
-        senderName = userData.name.trim()
-      }
-    }
+    const senderName = userSnap.data()?.name?.trim()
+    if (!senderName) throw new Error('Complete your profile name before sending a request.')
 
     const item = {
       id: connId,
@@ -123,12 +145,22 @@ export const sendRequest = async (toUid, maybeTarget) => {
       toUid: recipient,
       participants: [currentUid, recipient],
       status: 'pending',
+      notificationKey: notificationRef.id,
       profiles: {
         [currentUid]: { name: senderName }
       },
       createdAt: serverTimestamp()
     }
     transaction.set(connRef, item)
+    transaction.set(notificationRef, {
+      recipientUid: recipient,
+      type: 'connection_request',
+      actorUid: currentUid,
+      actorName: senderName,
+      createdAt: serverTimestamp(),
+      read: false,
+      connectionId: connId,
+    })
     return {
       ...item,
       createdAt: Date.now()
@@ -198,6 +230,7 @@ export const respondRequest = async (otherUid, status) => {
   const connId = pairId(currentUid, targetUid)
   const connRef = doc(firestore, 'connections', connId)
   const userRef = doc(firestore, 'users', currentUid)
+  const fallbackNotificationKey = doc(collection(firestore, 'notifications')).id
 
   return await runTransaction(firestore, async transaction => {
     const connSnap = await transaction.get(connRef)
@@ -214,13 +247,15 @@ export const respondRequest = async (otherUid, status) => {
 
     if (status === 'accepted') {
       const userSnap = await transaction.get(userRef)
-      let recipientName = auth?.currentUser?.displayName || 'Student'
-      if (userSnap.exists()) {
-        const userData = userSnap.data()
-        if (userData?.name?.trim()) {
-          recipientName = userData.name.trim()
-        }
-      }
+      const recipientName = userSnap.data()?.name?.trim()
+      if (!recipientName) throw new Error('Complete your profile name before accepting a request.')
+
+      const notificationKey = data.notificationKey || fallbackNotificationKey
+      const acceptedNotificationRef = doc(
+        firestore,
+        'notifications',
+        `connection_accepted_${notificationKey}`,
+      )
 
       const existingProfiles = (data.profiles && typeof data.profiles === 'object') ? data.profiles : {}
       const updatedProfiles = {
@@ -230,8 +265,18 @@ export const respondRequest = async (otherUid, status) => {
 
       transaction.update(connRef, {
         status: 'accepted',
+        notificationKey,
         profiles: updatedProfiles,
         updatedAt: serverTimestamp()
+      })
+      transaction.set(acceptedNotificationRef, {
+        recipientUid: data.fromUid,
+        type: 'connection_accepted',
+        actorUid: currentUid,
+        actorName: recipientName,
+        createdAt: serverTimestamp(),
+        read: false,
+        connectionId: connId,
       })
 
       return {

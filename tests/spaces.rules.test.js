@@ -116,11 +116,63 @@ async function seed({ members = ['alice', 'bob'], withPost = true, campus = 'Nor
   })
 }
 
+function notification({
+  recipientUid = 'bob',
+  actorUid = 'alice',
+  actorName = 'Alice',
+  type = 'connection_request',
+  ...eventFields
+} = {}) {
+  return {
+    recipientUid,
+    type,
+    actorUid,
+    actorName,
+    createdAt: now(),
+    read: false,
+    ...eventFields,
+  }
+}
+
+async function createPendingJoinRequest(requesterUid, notificationKey = `request-${requesterUid}`) {
+  const db = dbFor(requesterUid)
+  const batch = writeBatch(db)
+  batch.set(doc(db, `${SPACE_PATH}/joinRequests/${requesterUid}`), {
+    uid: requesterUid,
+    status: 'pending',
+    createdAt: now(),
+    notificationKey,
+  })
+  batch.set(doc(db, 'notifications', notificationKey), notification({
+    recipientUid: 'alice',
+    actorUid: requesterUid,
+    actorName: requesterUid[0].toUpperCase() + requesterUid.slice(1),
+    type: 'space_join_request',
+    spaceId: SPACE_ID,
+    spaceName: 'Campus Coders',
+    requestUid: requesterUid,
+  }))
+  await assertSucceeds(batch.commit())
+  return notificationKey
+}
+
+function addSpaceDecisionNotification(batch, db, reviewerUid, requesterUid, notificationKey, approved) {
+  batch.set(doc(db, 'notifications', `space_decision_${notificationKey}`), notification({
+    recipientUid: requesterUid,
+    actorUid: reviewerUid,
+    actorName: reviewerUid[0].toUpperCase() + reviewerUid.slice(1),
+    type: approved ? 'space_join_approved' : 'space_join_rejected',
+    spaceId: SPACE_ID,
+    spaceName: 'Campus Coders',
+    requestUid: requesterUid,
+  }))
+}
+
 async function assertStaffCannotApproveOwnRequest(uid) {
   await seed({ visibility: 'private', members: ['alice'], withPost: false })
   const db = dbFor(uid)
   const requestRef = doc(db, `${SPACE_PATH}/joinRequests/${uid}`)
-  await assertSucceeds(setDoc(requestRef, { uid, status: 'pending', createdAt: now() }))
+  await createPendingJoinRequest(uid)
 
   const batch = writeBatch(db)
   batch.update(doc(db, SPACE_PATH), { members: ['alice', uid], memberCount: 2 })
@@ -159,6 +211,164 @@ beforeEach(async () => {
 
 after(async () => {
   await testEnv?.cleanup()
+})
+
+test('notifications can only be read by their recipient', async () => {
+  await seed({ withPost: false })
+  await testEnv.withSecurityRulesDisabled(async context => {
+    await setDoc(doc(context.firestore(), 'notifications/for-bob'), notification({ connectionId: 'alice_bob' }))
+  })
+  const bobDb = dbFor('bob')
+  const aliceDb = dbFor('alice')
+  await assertSucceeds(getDoc(doc(bobDb, 'notifications/for-bob')))
+  await assertFails(getDoc(doc(aliceDb, 'notifications/for-bob')))
+  const ownList = await assertSucceeds(getDocs(query(
+    collection(bobDb, 'notifications'), where('recipientUid', '==', 'bob'),
+  )))
+  assert.equal(ownList.size, 1)
+  await assertFails(getDocs(query(
+    collection(aliceDb, 'notifications'), where('recipientUid', '==', 'bob'),
+  )))
+})
+
+test('only the recipient can mark unread notifications read', async () => {
+  await seed({ withPost: false })
+  await testEnv.withSecurityRulesDisabled(async context => {
+    await setDoc(doc(context.firestore(), 'notifications/read-check'), notification({ connectionId: 'alice_bob' }))
+  })
+  await assertSucceeds(updateDoc(doc(dbFor('bob'), 'notifications/read-check'), { read: true }))
+  await assertFails(updateDoc(doc(dbFor('alice'), 'notifications/read-check'), { read: true }))
+  await assertFails(updateDoc(doc(dbFor('bob'), 'notifications/read-check'), { actorName: 'Changed Name' }))
+  await assertFails(deleteDoc(doc(dbFor('bob'), 'notifications/read-check')))
+})
+
+test('connection request and acceptance notifications are source-bound and atomic', async () => {
+  await seed({ withPost: false })
+  const aliceDb = dbFor('alice')
+  const connectionRef = doc(aliceDb, 'connections/alice_bob')
+  const requestNotificationRef = doc(aliceDb, 'notifications/request-notification-key')
+  const createRequest = writeBatch(aliceDb)
+  createRequest.set(connectionRef, {
+    id: 'alice_bob', fromUid: 'alice', toUid: 'bob', participants: ['alice', 'bob'],
+    status: 'pending', profiles: { alice: { name: 'Alice' } }, createdAt: now(),
+    notificationKey: 'request-notification-key',
+  })
+  createRequest.set(requestNotificationRef, notification({
+    recipientUid: 'bob', type: 'connection_request', connectionId: 'alice_bob',
+  }))
+  await assertSucceeds(createRequest.commit())
+
+  const bobDb = dbFor('bob')
+  const acceptedNotificationRef = doc(bobDb, 'notifications/connection_accepted_request-notification-key')
+  const acceptRequest = writeBatch(bobDb)
+  acceptRequest.update(doc(bobDb, 'connections/alice_bob'), {
+    status: 'accepted',
+    profiles: { alice: { name: 'Alice' }, bob: { name: 'Bob' } },
+    updatedAt: now(),
+  })
+  acceptRequest.set(acceptedNotificationRef, notification({
+    recipientUid: 'alice', actorUid: 'bob', actorName: 'Bob',
+    type: 'connection_accepted', connectionId: 'alice_bob',
+  }))
+  await assertSucceeds(acceptRequest.commit())
+})
+
+test('notifications cannot be forged or created without a matching source event', async () => {
+  await seed({ withPost: false })
+  const aliceDb = dbFor('alice')
+  await assertFails(setDoc(doc(aliceDb, 'notifications/arbitrary'), notification({
+    type: 'system',
+  })))
+  await assertFails(setDoc(doc(aliceDb, 'notifications/spoofed-actor'), notification({
+    type: 'connection_request', actorUid: 'bob', connectionId: 'alice_bob',
+  })))
+
+  const batch = writeBatch(aliceDb)
+  batch.set(doc(aliceDb, 'connections/alice_bob'), {
+    id: 'alice_bob', fromUid: 'alice', toUid: 'bob', participants: ['alice', 'bob'],
+    status: 'pending', profiles: { alice: { name: 'Alice' } }, createdAt: now(),
+    notificationKey: 'wrong-recipient-key',
+  })
+  batch.set(doc(aliceDb, 'notifications/wrong-recipient-key'), notification({
+    recipientUid: 'carol', type: 'connection_request', connectionId: 'alice_bob',
+  }))
+  await assertFails(batch.commit())
+})
+
+test('message notifications require the matching new chat message', async () => {
+  await seed({ withPost: false })
+  await testEnv.withSecurityRulesDisabled(async context => {
+    await setDoc(doc(context.firestore(), 'chats/alice_bob'), {
+      id: 'alice_bob', participants: ['alice', 'bob'], lastMessage: '',
+      createdAt: now(), updatedAt: now(),
+    })
+  })
+  const aliceDb = dbFor('alice')
+  const batch = writeBatch(aliceDb)
+  batch.set(doc(aliceDb, 'chats/alice_bob/messages/message-one'), {
+    id: 'message-one', senderUid: 'alice', text: 'Hello', createdAt: now(),
+  })
+  batch.update(doc(aliceDb, 'chats/alice_bob'), { lastMessage: 'Hello', updatedAt: now() })
+  batch.set(doc(aliceDb, 'notifications/message_message-one'), notification({
+    recipientUid: 'bob', type: 'message_received', chatId: 'alice_bob', messageId: 'message-one',
+  }))
+  await assertSucceeds(batch.commit())
+})
+
+test('private Space request and owner decision notifications are atomic', async () => {
+  await seed({ members: ['alice'], visibility: 'private', withPost: false })
+  const bobDb = dbFor('bob')
+  const requestBatch = writeBatch(bobDb)
+  requestBatch.set(doc(bobDb, `${SPACE_PATH}/joinRequests/bob`), {
+    uid: 'bob', status: 'pending', createdAt: now(), notificationKey: 'join-request-key',
+  })
+  requestBatch.set(doc(bobDb, 'notifications/join-request-key'), notification({
+    recipientUid: 'alice', actorUid: 'bob', actorName: 'Bob', type: 'space_join_request',
+    spaceId: SPACE_ID, spaceName: 'Campus Coders', requestUid: 'bob',
+  }))
+  await assertSucceeds(requestBatch.commit())
+
+  const aliceDb = dbFor('alice')
+  const decisionBatch = writeBatch(aliceDb)
+  decisionBatch.update(doc(aliceDb, `${SPACE_PATH}/joinRequests/bob`), {
+    status: 'approved', reviewedBy: 'alice', reviewedAt: now(),
+  })
+  decisionBatch.update(doc(aliceDb, SPACE_PATH), {
+    members: ['alice', 'bob'], memberCount: 2, membershipApproval: deleteField(),
+  })
+  decisionBatch.set(doc(aliceDb, 'users/bob/spaceMemberships/north-space'), {
+    spaceId: SPACE_ID, joinedAt: now(),
+  })
+  decisionBatch.set(doc(aliceDb, 'notifications/space_decision_join-request-key'), notification({
+    recipientUid: 'bob', actorUid: 'alice', actorName: 'Alice', type: 'space_join_approved',
+    spaceId: SPACE_ID, spaceName: 'Campus Coders', requestUid: 'bob',
+  }))
+  await assertSucceeds(decisionBatch.commit())
+})
+
+test('private Space rejection sends a validated decision notification', async () => {
+  await seed({ members: ['alice'], visibility: 'private', withPost: false })
+  const carolDb = dbFor('carol')
+  const requestBatch = writeBatch(carolDb)
+  requestBatch.set(doc(carolDb, `${SPACE_PATH}/joinRequests/carol`), {
+    uid: 'carol', status: 'pending', createdAt: now(), notificationKey: 'rejected-request-key',
+  })
+  requestBatch.set(doc(carolDb, 'notifications/rejected-request-key'), notification({
+    recipientUid: 'alice', actorUid: 'carol', actorName: 'Carol', type: 'space_join_request',
+    spaceId: SPACE_ID, spaceName: 'Campus Coders', requestUid: 'carol',
+  }))
+  await assertSucceeds(requestBatch.commit())
+
+  const aliceDb = dbFor('alice')
+  const rejectionBatch = writeBatch(aliceDb)
+  rejectionBatch.update(doc(aliceDb, `${SPACE_PATH}/joinRequests/carol`), {
+    status: 'rejected', reviewedBy: 'alice', reviewedAt: now(),
+  })
+  rejectionBatch.set(doc(aliceDb, 'notifications/space_decision_rejected-request-key'), notification({
+    recipientUid: 'carol', actorUid: 'alice', actorName: 'Alice', type: 'space_join_rejected',
+    spaceId: SPACE_ID, spaceName: 'Campus Coders', requestUid: 'carol',
+  }))
+  await assertSucceeds(rejectionBatch.commit())
 })
 
 test('space creation succeeds for the caller’s protected campus', async () => {
@@ -433,9 +643,7 @@ test('private join requests do not grant read access until approved', async () =
   await assertFails(setDoc(doc(db, 'users/carol/spaceMemberships/north-space'), {
     spaceId: SPACE_ID, joinedAt: now(),
   }))
-  await assertSucceeds(setDoc(doc(db, `${SPACE_PATH}/joinRequests/carol`), {
-    uid: 'carol', status: 'pending', createdAt: now(),
-  }))
+  await createPendingJoinRequest('carol')
   await assertFails(getDoc(doc(db, SPACE_PATH)))
 })
 
@@ -459,7 +667,7 @@ test('only the owner or staff can approve a private membership request', async (
     await updateDoc(doc(context.firestore(), SPACE_PATH), { membershipApproval: 'stale-carol' })
   })
   const requestRef = doc(dbFor('carol'), `${SPACE_PATH}/joinRequests/carol`)
-  await assertSucceeds(setDoc(requestRef, { uid: 'carol', status: 'pending', createdAt: now() }))
+  const requestKey = await createPendingJoinRequest('carol')
 
   const approveAs = async (reviewerUid) => {
     const reviewerDb = dbFor(reviewerUid)
@@ -475,6 +683,7 @@ test('only the owner or staff can approve a private membership request', async (
     batch.set(doc(reviewerDb, 'users/carol/spaceMemberships/north-space'), {
       spaceId: SPACE_ID, joinedAt: now(),
     })
+    addSpaceDecisionNotification(batch, reviewerDb, reviewerUid, 'carol', requestKey, true)
     return batch.commit()
   }
 
@@ -487,9 +696,7 @@ test('only the owner or staff can approve a private membership request', async (
 
   await testEnv.clearFirestore()
   await seed({ visibility: 'private', members: ['alice'], withPost: false })
-  await assertSucceeds(setDoc(doc(dbFor('carol'), `${SPACE_PATH}/joinRequests/carol`), {
-    uid: 'carol', status: 'pending', createdAt: now(),
-  }))
+  const staffRequestKey = await createPendingJoinRequest('carol')
   const staffDb = dbFor('moderator')
   const staffBatch = writeBatch(staffDb)
   staffBatch.update(doc(staffDb, SPACE_PATH), {
@@ -501,6 +708,7 @@ test('only the owner or staff can approve a private membership request', async (
   staffBatch.set(doc(staffDb, 'users/carol/spaceMemberships/north-space'), {
     spaceId: SPACE_ID, joinedAt: now(),
   })
+  addSpaceDecisionNotification(staffBatch, staffDb, 'moderator', 'carol', staffRequestKey, true)
   await assertSucceeds(staffBatch.commit())
   const staffApproved = await getDoc(doc(staffDb, SPACE_PATH))
   assert.deepEqual(staffApproved.data().members, ['alice', 'carol'])
@@ -518,9 +726,7 @@ test('an admin cannot approve their own private join request', async () => {
 test('stale approved requests cannot be reused after a member leaves', async () => {
   await seed({ visibility: 'private', members: ['alice'], withPost: false })
   const carolDb = dbFor('carol')
-  await assertSucceeds(setDoc(doc(carolDb, `${SPACE_PATH}/joinRequests/carol`), {
-    uid: 'carol', status: 'pending', createdAt: now(),
-  }))
+  const requestKey = await createPendingJoinRequest('carol')
 
   const ownerDb = dbFor('alice')
   const approval = writeBatch(ownerDb)
@@ -531,6 +737,7 @@ test('stale approved requests cannot be reused after a member leaves', async () 
   approval.set(doc(ownerDb, 'users/carol/spaceMemberships/north-space'), {
     spaceId: SPACE_ID, joinedAt: now(),
   })
+  addSpaceDecisionNotification(approval, ownerDb, 'alice', 'carol', requestKey, true)
   await assertSucceeds(approval.commit())
 
   const leave = writeBatch(carolDb)
@@ -549,12 +756,20 @@ test('stale approved requests cannot be reused after a member leaves', async () 
     status: 'approved', reviewedBy: 'carol', reviewedAt: now(),
   }))
 
-  await assertSucceeds(updateDoc(doc(carolDb, `${SPACE_PATH}/joinRequests/carol`), {
+  const repeatKey = 'request-carol-again'
+  const repeatBatch = writeBatch(carolDb)
+  repeatBatch.update(doc(carolDb, `${SPACE_PATH}/joinRequests/carol`), {
     status: 'pending',
     createdAt: Timestamp.fromMillis(now().toMillis() + 1),
+    notificationKey: repeatKey,
     reviewedBy: deleteField(),
     reviewedAt: deleteField(),
+  })
+  repeatBatch.set(doc(carolDb, 'notifications', repeatKey), notification({
+    recipientUid: 'alice', actorUid: 'carol', actorName: 'Carol', type: 'space_join_request',
+    spaceId: SPACE_ID, spaceName: 'Campus Coders', requestUid: 'carol',
   }))
+  await assertSucceeds(repeatBatch.commit())
   const reapprove = writeBatch(ownerDb)
   reapprove.update(doc(ownerDb, SPACE_PATH), { members: ['carol', 'alice'], memberCount: 2 })
   reapprove.update(doc(ownerDb, `${SPACE_PATH}/joinRequests/carol`), {
@@ -563,6 +778,7 @@ test('stale approved requests cannot be reused after a member leaves', async () 
   reapprove.set(doc(ownerDb, 'users/carol/spaceMemberships/north-space'), {
     spaceId: SPACE_ID, joinedAt: now(),
   })
+  addSpaceDecisionNotification(reapprove, ownerDb, 'alice', 'carol', repeatKey, true)
   await assertSucceeds(reapprove.commit())
 })
 
@@ -570,18 +786,30 @@ test('a requester can reset a rejected request without approving themselves', as
   await seed({ visibility: 'private', members: ['alice'], withPost: false })
   const bobDb = dbFor('bob')
   const requestRef = doc(bobDb, `${SPACE_PATH}/joinRequests/bob`)
-  await assertSucceeds(setDoc(requestRef, { uid: 'bob', status: 'pending', createdAt: now() }))
+  const requestKey = await createPendingJoinRequest('bob')
 
   const ownerDb = dbFor('alice')
-  await assertSucceeds(updateDoc(doc(ownerDb, `${SPACE_PATH}/joinRequests/bob`), {
+  const rejection = writeBatch(ownerDb)
+  rejection.update(doc(ownerDb, `${SPACE_PATH}/joinRequests/bob`), {
     status: 'rejected', reviewedBy: 'alice', reviewedAt: now(),
-  }))
-  await assertSucceeds(updateDoc(requestRef, {
+  })
+  addSpaceDecisionNotification(rejection, ownerDb, 'alice', 'bob', requestKey, false)
+  await assertSucceeds(rejection.commit())
+
+  const nextRequestKey = 'request-bob-again'
+  const reset = writeBatch(bobDb)
+  reset.update(requestRef, {
     status: 'pending',
     createdAt: Timestamp.fromMillis(now().toMillis() + 1),
+    notificationKey: nextRequestKey,
     reviewedBy: deleteField(),
     reviewedAt: deleteField(),
+  })
+  reset.set(doc(bobDb, 'notifications', nextRequestKey), notification({
+    recipientUid: 'alice', actorUid: 'bob', actorName: 'Bob', type: 'space_join_request',
+    spaceId: SPACE_ID, spaceName: 'Campus Coders', requestUid: 'bob',
   }))
+  await assertSucceeds(reset.commit())
   await assertFails(updateDoc(requestRef, {
     status: 'approved', reviewedBy: 'bob', reviewedAt: now(),
   }))
@@ -591,9 +819,7 @@ test('a requester can reset a rejected request without approving themselves', as
 test('private approval rejects persistent membershipApproval metadata', async () => {
   await seed({ visibility: 'private', members: ['alice'], withPost: false })
   const carolDb = dbFor('carol')
-  await assertSucceeds(setDoc(doc(carolDb, `${SPACE_PATH}/joinRequests/carol`), {
-    uid: 'carol', status: 'pending', createdAt: now(),
-  }))
+  const requestKey = await createPendingJoinRequest('carol')
   const ownerDb = dbFor('alice')
   const batch = writeBatch(ownerDb)
   batch.update(doc(ownerDb, SPACE_PATH), {
@@ -605,15 +831,14 @@ test('private approval rejects persistent membershipApproval metadata', async ()
   batch.set(doc(ownerDb, 'users/carol/spaceMemberships/north-space'), {
     spaceId: SPACE_ID, joinedAt: now(),
   })
+  addSpaceDecisionNotification(batch, ownerDb, 'alice', 'carol', requestKey, true)
   await assertFails(batch.commit())
 })
 
 test('private approvals cannot exploit duplicate legacy members to add extra UIDs', async () => {
   await seed({ visibility: 'private', members: ['alice', 'alice'], withPost: false })
   const carolDb = dbFor('carol')
-  await assertSucceeds(setDoc(doc(carolDb, `${SPACE_PATH}/joinRequests/carol`), {
-    uid: 'carol', status: 'pending', createdAt: now(),
-  }))
+  const requestKey = await createPendingJoinRequest('carol')
   const aliceDb = dbFor('alice')
   const maliciousBatch = writeBatch(aliceDb)
   maliciousBatch.update(doc(aliceDb, SPACE_PATH), {
@@ -625,6 +850,7 @@ test('private approvals cannot exploit duplicate legacy members to add extra UID
   maliciousBatch.set(doc(aliceDb, 'users/carol/spaceMemberships/north-space'), {
     spaceId: SPACE_ID, joinedAt: now(),
   })
+  addSpaceDecisionNotification(maliciousBatch, aliceDb, 'alice', 'carol', requestKey, true)
   await assertFails(maliciousBatch.commit())
 
   const validBatch = writeBatch(aliceDb)
@@ -637,15 +863,14 @@ test('private approvals cannot exploit duplicate legacy members to add extra UID
   validBatch.set(doc(aliceDb, 'users/carol/spaceMemberships/north-space'), {
     spaceId: SPACE_ID, joinedAt: now(),
   })
+  addSpaceDecisionNotification(validBatch, aliceDb, 'alice', 'carol', requestKey, true)
   await assertSucceeds(validBatch.commit())
 })
 
 test('approved private members can read Space details, posts, and comments', async () => {
   await seed({ visibility: 'private', members: ['alice'] })
   const carolDb = dbFor('carol')
-  await assertSucceeds(setDoc(doc(carolDb, `${SPACE_PATH}/joinRequests/carol`), {
-    uid: 'carol', status: 'pending', createdAt: now(),
-  }))
+  const requestKey = await createPendingJoinRequest('carol')
   const aliceDb = dbFor('alice')
   const batch = writeBatch(aliceDb)
   batch.update(doc(aliceDb, SPACE_PATH), {
@@ -657,6 +882,7 @@ test('approved private members can read Space details, posts, and comments', asy
   batch.set(doc(aliceDb, 'users/carol/spaceMemberships/north-space'), {
     spaceId: SPACE_ID, joinedAt: now(),
   })
+  addSpaceDecisionNotification(batch, aliceDb, 'alice', 'carol', requestKey, true)
   await assertSucceeds(batch.commit())
   await assertSucceeds(getDoc(doc(carolDb, SPACE_PATH)))
   await assertSucceeds(getDoc(doc(carolDb, `${SPACE_PATH}/posts/${POST_ID}`)))

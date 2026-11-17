@@ -287,26 +287,51 @@ export const requestJoinSpace = async spaceId => {
   const firestore = requireDb()
   const uid = currentUid()
   const ref = joinRequestRef(firestore, spaceId, uid)
+  const notificationRef = doc(collection(firestore, 'notifications'))
   return runTransaction(firestore, async transaction => {
     const spaceSnapshot = await transaction.get(spaceRef(firestore, spaceId))
     const requestSnapshot = await transaction.get(ref)
     assertSpaceExists(spaceSnapshot)
     const spaceData = spaceSnapshot.data()
     if ((spaceData.visibility || 'public') !== 'private') return 'public'
+    if ((spaceData.members || []).includes(uid)) return 'approved'
+    if (spaceData.createdBy === uid) throw new Error('Space owners do not need to request access.')
+    const profileSnapshot = await transaction.get(doc(firestore, 'users', uid))
+    const actorName = profileSnapshot.data()?.name?.trim()
+    if (!actorName) throw new Error('Complete your profile name before requesting access.')
+
+    const notification = {
+      recipientUid: spaceData.createdBy,
+      type: 'space_join_request',
+      actorUid: uid,
+      actorName,
+      createdAt: serverTimestamp(),
+      read: false,
+      spaceId,
+      spaceName: spaceData.name,
+      requestUid: uid,
+    }
     if (requestSnapshot.exists()) {
       const requestData = requestSnapshot.data()
       if (requestData.status === 'pending') return 'pending'
-      if ((spaceData.members || []).includes(uid)) return requestData.status
       if (!['approved', 'rejected'].includes(requestData.status)) return requestData.status
       transaction.update(ref, {
         status: 'pending',
         createdAt: serverTimestamp(),
+        notificationKey: notificationRef.id,
         reviewedBy: deleteField(),
         reviewedAt: deleteField(),
       })
+      transaction.set(notificationRef, notification)
       return 'pending'
     }
-    transaction.set(ref, { uid, status: 'pending', createdAt: serverTimestamp() })
+    transaction.set(ref, {
+      uid,
+      status: 'pending',
+      createdAt: serverTimestamp(),
+      notificationKey: notificationRef.id,
+    })
+    transaction.set(notificationRef, notification)
     return 'pending'
   })
 }
@@ -359,6 +384,7 @@ export const respondJoinRequest = async (spaceId, requesterUid, approved) => {
   const uid = currentUid()
   const spaceDocument = spaceRef(firestore, spaceId)
   const requestDocument = joinRequestRef(firestore, spaceId, requesterUid)
+  const fallbackNotificationKey = doc(collection(firestore, 'notifications')).id
   return runTransaction(firestore, async transaction => {
     const spaceSnapshot = await transaction.get(spaceDocument)
     const requestSnapshot = await transaction.get(requestDocument)
@@ -367,12 +393,34 @@ export const respondJoinRequest = async (spaceId, requesterUid, approved) => {
       throw new Error('Pending request not found.')
     }
     const requestData = requestSnapshot.data()
+    const notificationKey = requestData.notificationKey || fallbackNotificationKey
+    const notificationId = `space_decision_${notificationKey}`
+    let actorName = ''
+    if (requesterUid !== uid) {
+      const reviewerProfile = await transaction.get(doc(firestore, 'users', uid))
+      actorName = reviewerProfile.data()?.name?.trim()
+      if (!actorName) throw new Error('Complete your profile name before reviewing a request.')
+    }
     const reviewedAt = serverTimestamp()
     transaction.update(requestDocument, {
       status: approved ? 'approved' : 'rejected',
       reviewedAt,
       reviewedBy: uid,
+      ...(!requestData.notificationKey ? { notificationKey } : {}),
     })
+    if (requesterUid !== uid) {
+      transaction.set(doc(firestore, 'notifications', notificationId), {
+        recipientUid: requesterUid,
+        type: approved ? 'space_join_approved' : 'space_join_rejected',
+        actorUid: uid,
+        actorName,
+        createdAt: serverTimestamp(),
+        read: false,
+        spaceId,
+        spaceName: spaceSnapshot.data().name,
+        requestUid: requesterUid,
+      })
+    }
     if (approved) {
       const members = normalizedMembers(spaceSnapshot.data())
       if (members.includes(requesterUid)) throw new Error('User is already a member.')

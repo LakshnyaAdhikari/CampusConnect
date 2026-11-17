@@ -7,6 +7,7 @@ import { auth, db } from '../../lib/firebase'
 import {
   collection,
   doc,
+  getDoc,
   query,
   where,
   onSnapshot,
@@ -321,6 +322,18 @@ export const sendMessage = async (chatId, text) => {
   const currentUid = getAuthUid()
 
   const chatRef = doc(firestore, 'chats', targetChatId)
+  const chatSnapshot = await getDoc(chatRef)
+  if (!chatSnapshot.exists()) throw new Error('Conversation not found.')
+  const participants = chatSnapshot.data().participants || []
+  if (!participants.includes(currentUid)) {
+    throw new Error('Unauthorized: You are not a participant in this conversation.')
+  }
+  const recipientUid = participants.find(uid => uid !== currentUid)
+  if (!recipientUid) throw new Error('Conversation recipient could not be determined.')
+
+  const profileSnapshot = await getDoc(doc(firestore, 'users', currentUid))
+  const actorName = profileSnapshot.data()?.name?.trim()
+  if (!actorName) throw new Error('Complete your profile name before sending a message.')
 
   const messageRef = doc(
     collection(firestore, 'chats', targetChatId, 'messages')
@@ -336,6 +349,16 @@ export const sendMessage = async (chatId, text) => {
   }
 
   batch.set(messageRef, item)
+  batch.set(doc(firestore, 'notifications', `message_${messageRef.id}`), {
+    recipientUid,
+    type: 'message_received',
+    actorUid: currentUid,
+    actorName,
+    createdAt: serverTimestamp(),
+    read: false,
+    chatId: targetChatId,
+    messageId: messageRef.id,
+  })
 
   batch.update(chatRef, {
     lastMessage: messageText,

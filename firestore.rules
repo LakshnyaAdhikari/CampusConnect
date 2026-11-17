@@ -13,6 +13,231 @@ service cloud.firestore {
     }
 
     // ==========================================
+    // USER NOTIFICATIONS
+    // ==========================================
+
+    match /notifications/{notificationId} {
+      function actorProfilePath() {
+        return /databases/$(database)/documents/users/$(request.auth.uid);
+      }
+
+      function notificationPath(targetId) {
+        return /databases/$(database)/documents/notifications/$(targetId);
+      }
+
+      function connectionPath(connectionId) {
+        return /databases/$(database)/documents/connections/$(connectionId);
+      }
+
+      function chatPath(chatId) {
+        return /databases/$(database)/documents/chats/$(chatId);
+      }
+
+      function messagePath(chatId, messageId) {
+        return /databases/$(database)/documents/chats/$(chatId)/messages/$(messageId);
+      }
+
+      function spacePath(spaceId) {
+        return /databases/$(database)/documents/spaces/$(spaceId);
+      }
+
+      function joinRequestPath(spaceId, requesterUid) {
+        return /databases/$(database)/documents/spaces/$(spaceId)/joinRequests/$(requesterUid);
+      }
+
+      function validEnvelope() {
+        return request.auth != null
+          && request.resource.data.recipientUid is string
+          && request.resource.data.recipientUid.size() > 0
+          && request.resource.data.actorUid == request.auth.uid
+          && request.resource.data.actorUid != request.resource.data.recipientUid
+          && request.resource.data.actorName is string
+          && request.resource.data.actorName.size() > 0
+          && request.resource.data.actorName.size() <= 80
+          && exists(actorProfilePath())
+          && get(actorProfilePath()).data.name == request.resource.data.actorName
+          && request.resource.data.createdAt is timestamp
+          && request.resource.data.read == false;
+      }
+
+      function validConnectionRequestEvent() {
+        return request.resource.data.type == 'connection_request'
+          && request.resource.data.keys().hasAll([
+            'recipientUid', 'type', 'actorUid', 'actorName', 'createdAt', 'read', 'connectionId'
+          ])
+          && validConnectionRequestEventDetails();
+      }
+
+      function validConnectionRequestEventDetails() {
+        let sourcePath = connectionPath(request.resource.data.connectionId);
+        return request.resource.data.keys().hasOnly([
+            'recipientUid', 'type', 'actorUid', 'actorName', 'createdAt', 'read', 'connectionId'
+          ])
+          && request.resource.data.keys().hasAll([
+            'recipientUid', 'type', 'actorUid', 'actorName', 'createdAt', 'read', 'connectionId'
+          ])
+          && request.resource.data.connectionId is string
+          && !exists(sourcePath)
+          && existsAfter(sourcePath)
+          && getAfter(sourcePath).data.notificationKey == notificationId
+          && getAfter(sourcePath).data.status == 'pending'
+          && getAfter(sourcePath).data.fromUid == request.resource.data.actorUid
+          && getAfter(sourcePath).data.toUid == request.resource.data.recipientUid;
+      }
+
+      function validConnectionAcceptedEvent() {
+        return request.resource.data.type == 'connection_accepted'
+          && request.resource.data.keys().hasAll([
+            'recipientUid', 'type', 'actorUid', 'actorName', 'createdAt', 'read', 'connectionId'
+          ])
+          && validConnectionAcceptedEventDetails();
+      }
+
+      function validConnectionAcceptedEventDetails() {
+        let sourcePath = connectionPath(request.resource.data.connectionId);
+        return request.resource.data.keys().hasOnly([
+            'recipientUid', 'type', 'actorUid', 'actorName', 'createdAt', 'read', 'connectionId'
+          ])
+          && request.resource.data.keys().hasAll([
+            'recipientUid', 'type', 'actorUid', 'actorName', 'createdAt', 'read', 'connectionId'
+          ])
+          && request.resource.data.connectionId is string
+          && exists(sourcePath)
+          && existsAfter(sourcePath)
+          && get(sourcePath).data.status == 'pending'
+          && getAfter(sourcePath).data.status == 'accepted'
+          && getAfter(sourcePath).data.notificationKey is string
+          && notificationId == 'connection_accepted_' + getAfter(sourcePath).data.notificationKey
+          && getAfter(sourcePath).data.fromUid == request.resource.data.recipientUid
+          && getAfter(sourcePath).data.toUid == request.resource.data.actorUid;
+      }
+
+      function validMessageEvent() {
+        return request.resource.data.type == 'message_received'
+          && request.resource.data.keys().hasAll([
+            'recipientUid', 'type', 'actorUid', 'actorName', 'createdAt', 'read', 'chatId', 'messageId'
+          ])
+          && validMessageEventDetails();
+      }
+
+      function validMessageEventDetails() {
+        let sourcePath = messagePath(request.resource.data.chatId, request.resource.data.messageId);
+        let parentChatPath = chatPath(request.resource.data.chatId);
+        return request.resource.data.keys().hasOnly([
+            'recipientUid', 'type', 'actorUid', 'actorName', 'createdAt', 'read', 'chatId', 'messageId'
+          ])
+          && request.resource.data.keys().hasAll([
+            'recipientUid', 'type', 'actorUid', 'actorName', 'createdAt', 'read', 'chatId', 'messageId'
+          ])
+          && request.resource.data.chatId is string
+          && request.resource.data.messageId is string
+          && notificationId == 'message_' + request.resource.data.messageId
+          && exists(parentChatPath)
+          && get(parentChatPath).data.participants.hasAll([
+            request.resource.data.actorUid,
+            request.resource.data.recipientUid
+          ])
+          && !exists(sourcePath)
+          && existsAfter(sourcePath)
+          && getAfter(sourcePath).data.id == request.resource.data.messageId
+          && getAfter(sourcePath).data.senderUid == request.resource.data.actorUid;
+      }
+
+      function validSpaceJoinRequestEvent() {
+        return request.resource.data.type == 'space_join_request'
+          && request.resource.data.keys().hasAll([
+            'recipientUid', 'type', 'actorUid', 'actorName', 'createdAt', 'read', 'spaceId', 'spaceName', 'requestUid'
+          ])
+          && validSpaceJoinRequestEventDetails();
+      }
+
+      function validSpaceJoinRequestEventDetails() {
+        let targetSpacePath = spacePath(request.resource.data.spaceId);
+        let sourcePath = joinRequestPath(request.resource.data.spaceId, request.resource.data.requestUid);
+        let sourceCreated = !exists(sourcePath)
+          && existsAfter(sourcePath)
+          && getAfter(sourcePath).data.status == 'pending'
+          && getAfter(sourcePath).data.uid == request.resource.data.requestUid
+          && getAfter(sourcePath).data.notificationKey == notificationId;
+        let sourceReset = exists(sourcePath)
+          && get(sourcePath).data.status in ['approved', 'rejected']
+          && getAfter(sourcePath).data.status == 'pending'
+          && getAfter(sourcePath).data.uid == request.resource.data.requestUid
+          && getAfter(sourcePath).data.notificationKey == notificationId
+          && getAfter(sourcePath).data.notificationKey != get(sourcePath).data.get('notificationKey', '')
+          && getAfter(sourcePath).data.createdAt > get(sourcePath).data.createdAt;
+        return request.resource.data.keys().hasOnly([
+            'recipientUid', 'type', 'actorUid', 'actorName', 'createdAt', 'read', 'spaceId', 'spaceName', 'requestUid'
+          ])
+          && request.resource.data.keys().hasAll([
+            'recipientUid', 'type', 'actorUid', 'actorName', 'createdAt', 'read', 'spaceId', 'spaceName', 'requestUid'
+          ])
+          && request.resource.data.spaceId is string
+          && request.resource.data.requestUid == request.resource.data.actorUid
+          && notificationId is string
+          && exists(targetSpacePath)
+          && get(targetSpacePath).data.visibility == 'private'
+          && get(targetSpacePath).data.createdBy == request.resource.data.recipientUid
+          && request.resource.data.spaceName == get(targetSpacePath).data.name
+          && request.resource.data.actorUid != request.resource.data.recipientUid
+          && (sourceCreated || sourceReset);
+      }
+
+      function validSpaceDecisionEvent() {
+        return request.resource.data.type in ['space_join_approved', 'space_join_rejected']
+          && request.resource.data.keys().hasAll([
+            'recipientUid', 'type', 'actorUid', 'actorName', 'createdAt', 'read', 'spaceId', 'spaceName', 'requestUid'
+          ])
+          && validSpaceDecisionEventDetails();
+      }
+
+      function validSpaceDecisionEventDetails() {
+        let targetSpacePath = spacePath(request.resource.data.spaceId);
+        let sourcePath = joinRequestPath(request.resource.data.spaceId, request.resource.data.requestUid);
+        let approved = request.resource.data.type == 'space_join_approved';
+        return request.resource.data.keys().hasOnly([
+            'recipientUid', 'type', 'actorUid', 'actorName', 'createdAt', 'read', 'spaceId', 'spaceName', 'requestUid'
+          ])
+          && request.resource.data.keys().hasAll([
+            'recipientUid', 'type', 'actorUid', 'actorName', 'createdAt', 'read', 'spaceId', 'spaceName', 'requestUid'
+          ])
+          && request.resource.data.spaceId is string
+          && request.resource.data.requestUid == request.resource.data.recipientUid
+          && exists(targetSpacePath)
+          && get(targetSpacePath).data.visibility == 'private'
+          && request.resource.data.spaceName == get(targetSpacePath).data.name
+          && exists(sourcePath)
+          && existsAfter(sourcePath)
+          && get(sourcePath).data.status == 'pending'
+          && get(sourcePath).data.uid == request.resource.data.recipientUid
+          && getAfter(sourcePath).data.status == (approved ? 'approved' : 'rejected')
+          && getAfter(sourcePath).data.reviewedBy == request.resource.data.actorUid
+          && getAfter(sourcePath).data.notificationKey is string
+          && notificationId == 'space_decision_' + getAfter(sourcePath).data.notificationKey;
+      }
+
+      allow get, list: if request.auth != null
+        && resource.data.recipientUid == request.auth.uid;
+
+      allow create: if validEnvelope()
+        && (
+          validConnectionRequestEvent()
+          || validConnectionAcceptedEvent()
+          || validMessageEvent()
+          || validSpaceJoinRequestEvent()
+          || validSpaceDecisionEvent()
+        );
+
+      allow update: if request.auth != null
+        && resource.data.recipientUid == request.auth.uid
+        && resource.data.read == false
+        && request.resource.data.read == true
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read']);
+
+      allow delete: if false;
+    }
+
+    // ==========================================
     // PRIVATE USER PROFILES
     // ==========================================
 
@@ -198,6 +423,9 @@ service cloud.firestore {
     // ==========================================
 
     match /connections/{connectionId} {
+      function notificationPath(notificationId) {
+        return /databases/$(database)/documents/notifications/$(notificationId);
+      }
 
       // READ ONLY BY PARTICIPANTS
       allow get: if request.auth != null
@@ -219,7 +447,8 @@ service cloud.firestore {
           'participants',
           'status',
           'profiles',
-          'createdAt'
+          'createdAt',
+          'notificationKey'
         ])
         && request.resource.data.id == connectionId
         && (
@@ -242,6 +471,9 @@ service cloud.firestore {
         ])
         && request.resource.data.status == 'pending'
         && request.resource.data.createdAt is timestamp
+        && request.resource.data.notificationKey is string
+        && request.resource.data.notificationKey.size() > 0
+        && existsAfter(notificationPath(request.resource.data.notificationKey))
         && request.resource.data.profiles is map
         && request.resource.data.profiles.keys().hasOnly([
           request.auth.uid
@@ -258,10 +490,15 @@ service cloud.firestore {
         && request.resource.data.participants == resource.data.participants
         && request.resource.data.id == resource.data.id
         && request.resource.data.createdAt == resource.data.createdAt
+        && request.resource.data.notificationKey is string
+        && (!('notificationKey' in resource.data)
+          || request.resource.data.notificationKey == resource.data.notificationKey)
+        && existsAfter(notificationPath('connection_accepted_' + request.resource.data.notificationKey))
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
           'status',
           'profiles',
-          'updatedAt'
+          'updatedAt',
+          'notificationKey'
         ])
         && request.resource.data.updatedAt is timestamp
         && request.resource.data.profiles is map
@@ -375,6 +612,9 @@ service cloud.firestore {
       // ========================================
 
       match /messages/{messageId} {
+        function notificationPath(notificationId) {
+          return /databases/$(database)/documents/notifications/$(notificationId);
+        }
 
         function chatParticipant() {
           let chatPath =
@@ -401,7 +641,8 @@ service cloud.firestore {
           && request.resource.data.text is string
           && request.resource.data.text.size() > 0
           && request.resource.data.text.size() <= 5000
-          && request.resource.data.createdAt is timestamp;
+          && request.resource.data.createdAt is timestamp
+          && existsAfter(notificationPath('message_' + messageId));
 
         // NO EDITING OR DELETING MESSAGES
         allow update, delete: if false;
@@ -640,6 +881,10 @@ service cloud.firestore {
       allow delete: if false;
 
       match /joinRequests/{requestUid} {
+        function notificationPath(notificationId) {
+          return /databases/$(database)/documents/notifications/$(notificationId);
+        }
+
         function canReviewRequests() {
           return isOwner() || isStaff();
         }
@@ -652,15 +897,19 @@ service cloud.firestore {
             && resource.data.createdAt is timestamp
             && exists(spacePath())
             && !(request.auth.uid in get(spacePath()).data.members)
-            && request.resource.data.keys().hasOnly(['uid', 'status', 'createdAt'])
+            && request.resource.data.keys().hasOnly(['uid', 'status', 'createdAt', 'notificationKey'])
+            && request.resource.data.keys().hasAll(['uid', 'status', 'createdAt', 'notificationKey'])
             && request.resource.data.uid == requestUid
             && request.resource.data.status == 'pending'
             && request.resource.data.createdAt is timestamp
             && request.resource.data.createdAt > resource.data.createdAt
+            && request.resource.data.notificationKey is string
+            && request.resource.data.notificationKey != resource.data.get('notificationKey', '')
+            && existsAfter(notificationPath(request.resource.data.notificationKey))
             && !('reviewedBy' in request.resource.data)
             && !('reviewedAt' in request.resource.data)
             && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-              'status', 'createdAt', 'reviewedBy', 'reviewedAt'
+              'status', 'createdAt', 'reviewedBy', 'reviewedAt', 'notificationKey'
             ]);
         }
 
@@ -674,11 +923,15 @@ service cloud.firestore {
           && exists(spacePath())
           && isPrivateData(get(spacePath()).data)
           && !(request.auth.uid in get(spacePath()).data.members)
-          && request.resource.data.keys().hasOnly(['uid', 'status', 'createdAt'])
-          && request.resource.data.keys().hasAll(['uid', 'status', 'createdAt'])
+          && request.auth.uid != get(spacePath()).data.createdBy
+          && request.resource.data.keys().hasOnly(['uid', 'status', 'createdAt', 'notificationKey'])
+          && request.resource.data.keys().hasAll(['uid', 'status', 'createdAt', 'notificationKey'])
           && request.resource.data.uid == requestUid
           && request.resource.data.status == 'pending'
-          && request.resource.data.createdAt is timestamp;
+          && request.resource.data.createdAt is timestamp
+          && request.resource.data.notificationKey is string
+          && request.resource.data.notificationKey.size() > 0
+          && existsAfter(notificationPath(request.resource.data.notificationKey));
 
         // Only the owner or staff can approve or decline a pending request.
         allow update: if (
@@ -691,9 +944,14 @@ service cloud.firestore {
             && (request.resource.data.status != 'approved' || request.auth.uid != requestUid)
             && request.resource.data.reviewedBy == request.auth.uid
             && request.resource.data.reviewedAt is timestamp
+            && request.resource.data.notificationKey is string
+            && (!('notificationKey' in resource.data)
+              || request.resource.data.notificationKey == resource.data.notificationKey)
             && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-              'status', 'reviewedBy', 'reviewedAt'
+              'status', 'reviewedBy', 'reviewedAt', 'notificationKey'
             ])
+            && (request.auth.uid == requestUid
+              || existsAfter(notificationPath('space_decision_' + request.resource.data.notificationKey)))
           ) || canResetRequest();
 
         allow delete: if false;
