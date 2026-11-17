@@ -5,7 +5,7 @@ import { Avatar, Button, Card, Input, Select, Spinner, Tag, Textarea, useToast }
 import { getPublicUser, updateUser } from '../features/profile/service'
 import { openChat } from '../features/messages/service'
 import { cancelRequest, respondRequest, sendRequest } from '../features/connections/service'
-import { listSpaces } from '../features/spaces/service'
+import { listJoinedSpaces, listSpaces } from '../features/spaces/service'
 import { useAuth } from '../context/AuthContext'
 import { useConnectionStatus } from '../features/connections/hooks'
 import { ReportButton } from '../features/admin/components/ReportButton'
@@ -48,10 +48,9 @@ export default function Profile() {
   }, [uid, profile, own, targetUid])
 
   useEffect(() => {
-    listSpaces(profile?.campus)
-      .then(res => setSpaces(res || []))
-      .catch(() => {})
-  }, [profile?.campus])
+    const spacesRequest = own ? listJoinedSpaces() : listSpaces()
+    spacesRequest.then(res => setSpaces(res || [])).catch(() => {})
+  }, [profile?.campus, own, user?.uid])
 
   const matchData = useMemo(() => {
     if (own || !profile || !p) {
@@ -512,7 +511,7 @@ export default function Profile() {
                     </span>
                     <div className="min-w-0 flex-1">
                       <h4 className="font-bold text-ink text-sm truncate">{s.name}</h4>
-                      <p className="text-[11px] text-muted">{s.memberCount || s.members?.length || 0} members -+ {s.campus}</p>
+                      <p className="text-[11px] text-muted">{s.memberCount || s.members?.length || 0} members -+ {s.campus} -+ {(s.visibility ?? 'campus') === 'private' ? 'Private' : (s.visibility ?? 'campus') === 'campus' ? 'Campus' : 'Public'}</p>
                     </div>
                   </div>
                   <p className="mt-2 text-xs text-muted line-clamp-2 leading-relaxed">
@@ -545,7 +544,7 @@ export default function Profile() {
                     </span>
                     <div className="min-w-0 flex-1">
                       <h4 className="font-bold text-ink text-sm truncate">{s.name}</h4>
-                      <p className="text-[11px] text-muted">{s.memberCount || s.members?.length || 0} members -+ {s.campus}</p>
+                      <p className="text-[11px] text-muted">{s.memberCount || s.members?.length || 0} members -+ {s.campus} -+ {(s.visibility ?? 'campus') === 'private' ? 'Private' : (s.visibility ?? 'campus') === 'campus' ? 'Campus' : 'Public'}</p>
                     </div>
                   </div>
                   <p className="mt-2 text-xs text-muted line-clamp-2 leading-relaxed">
