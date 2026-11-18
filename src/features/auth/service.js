@@ -193,6 +193,34 @@ export const signInGoogle = async () => {
   }
 }
 
+export const signInAdminGoogle = async () => {
+  if (!auth) throw new Error('Firebase Auth is not initialized. Check your Firebase configuration.')
+
+  try {
+    const cred = await signInWithPopup(auth, googleProvider)
+    // Custom Claims are the authorization source. Force a refresh so a newly
+    // provisioned administrator can sign in without trusting profile data.
+    const token = await cred.user.getIdTokenResult(true)
+    if (token.claims?.campusRole !== 'admin') {
+      await signOut(auth)
+      throw new Error('This Google account is not authorized as an administrator. Contact the project owner if you need access.')
+    }
+    return {
+      uid: cred.user.uid,
+      id: cred.user.uid,
+      email: cred.user.email,
+      name: cred.user.displayName || cred.user.email?.split('@')[0] || '',
+      displayName: cred.user.displayName || '',
+      photoURL: cred.user.photoURL || '',
+      role: 'admin',
+      onboarded: true,
+    }
+  } catch (error) {
+    if (error.message?.includes('not authorized as an administrator')) throw error
+    throw formatAuthError(error)
+  }
+}
+
 export const signOutUser = async () => {
   if (isMock('auth')) {
     store.currentUid = null

@@ -96,7 +96,9 @@ export const AuthProvider = ({ children }) => {
 
       let claims = {}
       try {
-        claims = (await firebaseUser.getIdTokenResult()).claims || {}
+        // Refresh on session restoration so newly provisioned Custom Claims
+        // become active after a reload even if the previous ID token is cached.
+        claims = (await firebaseUser.getIdTokenResult(true)).claims || {}
       } catch (error) {
         console.error('Could not load Firebase authorization claims:', error)
       }
@@ -226,6 +228,7 @@ export const AuthProvider = ({ children }) => {
         signUp: wrap(authService.signUpEmail),
         signIn: wrap(authService.signInEmail),
         signInWithGoogle: wrap(authService.signInGoogle),
+        signInAdminWithGoogle: wrap(authService.signInAdminGoogle),
         signOut: wrap(authService.signOutUser),
         refreshProfile,
         refreshAuthorization,

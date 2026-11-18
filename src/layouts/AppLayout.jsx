@@ -4,8 +4,6 @@ import { Compass, Users, MessageCircle, Sparkles, Shield, Settings, GraduationCa
 import { useAuth } from '../context/AuthContext'
 import { usePendingCount } from '../features/connections/hooks'
 import { listenNotifications } from '../features/notifications/service'
-import { store, notify } from '../lib/mockData'
-import { isMock } from '../lib/config'
 
 const links = [
   ['/discover', 'Discover', Compass, 'Find your people'],
@@ -21,7 +19,7 @@ export default function AppLayout(){
   const count = usePendingCount()
   const [unreadNotifications, setUnreadNotifications] = useState(0)
   const nav = useNavigate()
-  const rows = [...links, ...(role === 'admin' || role === 'moderator' ? [['/admin','Admin',Shield,'Community care']] : [])]
+  const rows = [...links, ...(role === 'admin' ? [['/admin','Admin',Shield,'Admin workspace']] : [])]
   const logout = async()=>{await signOut();nav('/')}
   const userProfileUid = user?.uid || profile?.uid || 'me'
 
@@ -81,21 +79,6 @@ export default function AppLayout(){
                 <LogOut size={17}/>
               </button>
             </div>
-            {isMock('auth') && (
-              <div className="mt-2.5 pt-2 border-t border-[#E8BCB9]/30 dark:border-[#2E2E3A] flex items-center justify-between gap-2">
-                <label className="text-[11px] font-semibold uppercase tracking-wider text-muted dark:text-[#717182] shrink-0">Role</label>
-                <select
-                  aria-label="Development role"
-                  value={role||'student'}
-                  onChange={e=>{const cur=store.users.find(u=>u.uid===profile?.uid);if(cur){cur.role=e.target.value;notify()}}}
-                  className="rounded-lg border border-line bg-background px-2 py-1 text-xs text-ink focus:outline-none dark:bg-[#1A1A22] dark:text-[#F4F4F6] dark:border-[#2E2E3A]"
-                >
-                  <option>student</option>
-                  <option>moderator</option>
-                  <option>admin</option>
-                </select>
-              </div>
-            )}
           </div>
           <p className="mb-2 px-1 text-[11px] font-bold uppercase tracking-[.18em] text-muted dark:text-[#717182]">Your campus</p>
         </div>
