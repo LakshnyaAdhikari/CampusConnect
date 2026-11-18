@@ -19,7 +19,7 @@ export default function AppLayout(){
   const count = usePendingCount()
   const [unreadNotifications, setUnreadNotifications] = useState(0)
   const nav = useNavigate()
-  const rows = [...links, ...(role === 'admin' ? [['/admin','Admin',Shield,'Admin workspace']] : [])]
+  const rows = [...links, ...(role === 'admin' ? [['/admin','Admin',Shield,'Community care']] : [])]
   const logout = async()=>{await signOut();nav('/')}
   const userProfileUid = user?.uid || profile?.uid || 'me'
 

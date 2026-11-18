@@ -27,6 +27,12 @@ export default function Admin({ denied = false }) {
     loadAdminDashboard(profile?.campus || '').then(result => {
       if (active) setData(result)
     }).catch(reason => {
+      if (import.meta.env.DEV) {
+        console.error('[Admin Dashboard] loadAdminDashboard authorization failed', {
+          code: reason?.code || 'unknown',
+          message: reason?.message || String(reason),
+        }, reason)
+      }
       if (active) setError(reason.message || 'Dashboard data could not be loaded.')
     }).finally(() => {
       if (active) setBusy(false)
@@ -65,20 +71,21 @@ export default function Admin({ denied = false }) {
 
 function SectionContent({ section, data }) {
   if (section === 'Overview') return <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-    <Stat title="Discoverable students" value={data.students.length} detail="Public directory profiles only" icon={Users}/>
-    <Stat title="Spaces available to this account" value={data.spaces.length} detail="Public Spaces and campus Spaces permitted by rules" icon={Sparkles}/>
-    <Card className="sm:col-span-2 xl:col-span-1"><h2 className="font-semibold">Reports / Moderation</h2><p className="mt-2 text-sm text-muted">Report records and moderation queues are unavailable to this frontend under the current Firestore rules.</p></Card>
+    <Stat title="Discoverable students" value={data.errors.students ? 'Unavailable' : data.students.length} detail={data.errors.students ? 'The public directory query failed.' : 'Public directory profiles only'} icon={Users}/>
+    <Stat title="Spaces available to this account" value={data.errors.publicSpaces || data.errors.campusSpaces ? 'Unavailable' : data.spaces.length} detail={data.errors.publicSpaces || data.errors.campusSpaces ? 'One or more permitted Space queries failed.' : 'Public Spaces and campus Spaces permitted by rules'} icon={Sparkles}/>
+    <Card className="sm:col-span-2 xl:col-span-1"><h2 className="font-semibold">Reports / Moderation</h2><p className="mt-2 text-sm text-muted">Report records and moderation queues have no Firebase-backed implementation in this frontend.</p></Card>
   </div>
 
   if (section === 'Student Management') return <Card><h2 className="font-semibold">Public directory</h2><p className="mt-2 text-sm text-muted">Private student profiles and account management are not available to administrators under the current Firestore rules. This list contains only discoverable public profiles.</p>
-    {data.students.length ? <ul className="mt-4 divide-y divide-line">{data.students.map(student => <li key={student.uid} className="flex items-center justify-between gap-3 py-3"><span className="truncate font-medium">{student.name || 'Campus member'}</span><span className="shrink-0 text-sm text-muted">{student.campus || 'Campus not set'}</span></li>)}</ul> : <p className="mt-4 rounded-xl bg-background p-4 text-sm text-muted">No discoverable student profiles are available.</p>}
+    {data.errors.students ? <p className="mt-4 rounded-xl bg-background p-4 text-sm text-danger">Public directory unavailable: {data.errors.students.message}</p> : data.students.length ? <ul className="mt-4 divide-y divide-line">{data.students.map(student => <li key={student.uid} className="flex items-center justify-between gap-3 py-3"><span className="truncate font-medium">{student.name || 'Campus member'}</span><span className="shrink-0 text-sm text-muted">{student.campus || 'Campus not set'}</span></li>)}</ul> : <p className="mt-4 rounded-xl bg-background p-4 text-sm text-muted">No discoverable student profiles are available.</p>}
   </Card>
 
   if (section === 'Space Management') return <Card><h2 className="font-semibold">Spaces visible to this account</h2><p className="mt-2 text-sm text-muted">Management actions are unavailable. Firestore currently permits reading public Spaces and campus Spaces matching this administrator profile.</p>
-    {data.spaces.length ? <ul className="mt-4 divide-y divide-line">{data.spaces.map(space => <li key={space.id} className="flex flex-wrap items-center justify-between gap-2 py-3"><span className="font-medium">{space.name || 'Untitled Space'}</span><span className="text-sm text-muted">{space.category || 'General'} · {space.campus || 'Campus not set'}</span></li>)}</ul> : <p className="mt-4 rounded-xl bg-background p-4 text-sm text-muted">No readable Spaces were found.</p>}
+    {(data.errors.publicSpaces || data.errors.campusSpaces) && <p className="mt-4 rounded-xl bg-background p-4 text-sm text-danger">{[data.errors.publicSpaces, data.errors.campusSpaces].filter(Boolean).map(error => `${error.operation}: ${error.message}`).join(' ')}</p>}
+    {data.spaces.length ? <ul className="mt-4 divide-y divide-line">{data.spaces.map(space => <li key={space.id} className="flex flex-wrap items-center justify-between gap-2 py-3"><span className="font-medium">{space.name || 'Untitled Space'}</span><span className="text-sm text-muted">{space.category || 'General'} · {space.campus || 'Campus not set'}</span></li>)}</ul> : !(data.errors.publicSpaces || data.errors.campusSpaces) && <p className="mt-4 rounded-xl bg-background p-4 text-sm text-muted">No readable Spaces were found.</p>}
   </Card>
 
-  return <Card><h2 className="font-semibold">Reports and moderation unavailable</h2><p className="mt-2 text-sm text-muted">The current backend rules do not expose a reports collection or report moderation operations. No sample reports or moderation actions are shown.</p></Card>
+  return <Card><h2 className="font-semibold">Reports and moderation unavailable</h2><p className="mt-2 text-sm text-muted">Firebase-backed report storage and moderation operations have not been implemented. No sample reports or moderation actions are shown.</p></Card>
 }
 
 function Stat({ title, value, detail, icon: Icon }) {
