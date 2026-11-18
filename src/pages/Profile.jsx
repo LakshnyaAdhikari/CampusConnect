@@ -221,7 +221,7 @@ export default function Profile() {
                   Send Message
                 </Button>
 
-                <ReportButton targetType="user" targetId={targetUid} />
+                <ReportButton targetType="profile" targetId={targetUid} />
               </div>
             )}
           </div>

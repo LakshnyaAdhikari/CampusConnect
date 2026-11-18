@@ -257,10 +257,7 @@ export const store = {
       ]
     }
   ],
-  reports:[
-    {id:'r1',reporterUid:'u1',targetType:'post',targetId:'p2',spaceId:'space1',reason:'Spam',status:'open',createdAt:now},
-    {id:'r2',reporterUid:'u2',targetType:'user',targetId:'u4',spaceId:'',reason:'Inappropriate profile',status:'open',createdAt:now}
-  ]
+  reports:[]
 }
 
 const listeners = new Set()

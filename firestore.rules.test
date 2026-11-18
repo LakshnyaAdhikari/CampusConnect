@@ -254,6 +254,168 @@ service cloud.firestore {
     }
 
     // ==========================================
+    // USER REPORTS AND MODERATION
+    // ==========================================
+
+    match /reports/{reportId} {
+      function signedIn() {
+        return request.auth != null;
+      }
+
+      function userProfilePath(uid) {
+        return /databases/$(database)/documents/users/$(uid);
+      }
+
+      function publicProfilePath(uid) {
+        return /databases/$(database)/documents/publicProfiles/$(uid);
+      }
+
+      function spacePath(spaceId) {
+        return /databases/$(database)/documents/spaces/$(spaceId);
+      }
+
+      function postPath(spaceId, postId) {
+        return /databases/$(database)/documents/spaces/$(spaceId)/posts/$(postId);
+      }
+
+      function validCategory(category) {
+        return category in ['spam', 'harassment', 'inappropriate_content', 'safety', 'other'];
+      }
+
+      // Reports may point only to public profiles and non-private Spaces/posts
+      // the reporter can browse. Private messages and private Space content are
+      // deliberately not valid report targets.
+      function reportableSpace(spaceId) {
+        let path = spacePath(spaceId);
+        let space = get(path).data;
+        let visibility = space.get('visibility', 'campus');
+        return exists(path)
+          && (visibility == 'public'
+            || (visibility == 'campus'
+              && exists(userProfilePath(request.auth.uid))
+              && get(userProfilePath(request.auth.uid)).data.get('campus', '') == space.campus));
+      }
+
+      function validTarget() {
+        let data = request.resource.data;
+        return (data.targetType == 'profile'
+            && data.targetId != request.auth.uid
+            && exists(publicProfilePath(data.targetId))
+            && get(publicProfilePath(data.targetId)).data.get('discoverable', false) == true)
+          || (data.targetType == 'space'
+            && reportableSpace(data.targetId))
+          || (data.targetType == 'post'
+            && reportableSpace(data.spaceId)
+            && exists(postPath(data.spaceId, data.targetId)));
+      }
+
+      function validBaseFields() {
+        let data = request.resource.data;
+        return data.keys().hasAll([
+            'reporterUid', 'targetType', 'targetId', 'category', 'reason',
+            'status', 'createdAt', 'updatedAt'
+          ])
+          && data.reporterUid == request.auth.uid
+          && data.targetType in ['profile', 'space', 'post']
+          && data.targetId is string
+          && data.targetId.size() > 0
+          && data.targetId.size() <= 128
+          && validCategory(data.category)
+          && data.reason is string
+          && data.reason.size() > 0
+          && data.reason.size() <= 1000
+          && data.status == 'pending'
+          && data.createdAt == request.time
+          && data.updatedAt == request.time;
+      }
+
+      function validCreateFields() {
+        let data = request.resource.data;
+        return (data.targetType == 'post'
+            && data.keys().hasOnly([
+              'reporterUid', 'targetType', 'targetId', 'spaceId', 'category',
+              'reason', 'status', 'createdAt', 'updatedAt'
+            ])
+            && data.spaceId is string
+            && data.spaceId.size() > 0
+            && data.spaceId.size() <= 128)
+          || (data.targetType in ['profile', 'space']
+            && !('spaceId' in data)
+            && data.keys().hasOnly([
+              'reporterUid', 'targetType', 'targetId', 'category', 'reason',
+              'status', 'createdAt', 'updatedAt'
+            ]));
+      }
+
+      function validModerationUpdate() {
+        let old = resource.data;
+        let next = request.resource.data;
+        let statusTransition = (old.status == 'pending'
+            && next.status in ['under_review', 'resolved', 'dismissed'])
+          || (old.status == 'under_review'
+            && next.status in ['under_review', 'resolved', 'dismissed']);
+        return next.keys().hasAll([
+            'reporterUid', 'targetType', 'targetId', 'category', 'reason',
+            'status', 'createdAt', 'updatedAt', 'reviewedBy', 'reviewedAt'
+          ])
+          && next.keys().hasOnly([
+            'reporterUid', 'targetType', 'targetId', 'spaceId', 'category',
+            'reason', 'status', 'createdAt', 'updatedAt',
+            'reviewedBy', 'reviewedAt'
+          ])
+          && next.reporterUid == old.reporterUid
+          && next.targetType == old.targetType
+          && next.targetId == old.targetId
+          && next.category == old.category
+          && next.reason == old.reason
+          && next.createdAt == old.createdAt
+          && ((old.targetType == 'post' && next.spaceId == old.spaceId)
+            || (old.targetType != 'post'
+              && !('spaceId' in old)
+              && !('spaceId' in next)))
+          && next.status in ['pending', 'under_review', 'resolved', 'dismissed']
+          && statusTransition
+          && next.updatedAt == request.time
+          && next.reviewedBy == request.auth.uid
+          && next.reviewedAt == request.time
+          && next.diff(old).affectedKeys().hasOnly([
+            'status', 'updatedAt', 'reviewedBy', 'reviewedAt'
+          ]);
+      }
+
+      allow get, list: if signedIn()
+        && (isAdmin() || resource.data.reporterUid == request.auth.uid);
+
+      allow create: if signedIn()
+        && validBaseFields()
+        && validCreateFields()
+        && validTarget();
+
+      allow update: if isAdmin() && validModerationUpdate();
+      allow delete: if false;
+
+      match /moderationNotes/{noteId} {
+        function reportPath() {
+          return /databases/$(database)/documents/reports/$(reportId);
+        }
+
+        allow get, list: if isAdmin();
+
+        allow create: if isAdmin()
+          && exists(reportPath())
+          && request.resource.data.keys().hasOnly(['authorUid', 'note', 'createdAt'])
+          && request.resource.data.keys().hasAll(['authorUid', 'note', 'createdAt'])
+          && request.resource.data.authorUid == request.auth.uid
+          && request.resource.data.note is string
+          && request.resource.data.note.size() > 0
+          && request.resource.data.note.size() <= 1000
+          && request.resource.data.createdAt == request.time;
+
+        allow update, delete: if false;
+      }
+    }
+
+    // ==========================================
     // PRIVATE USER PROFILES
     // ==========================================
 
