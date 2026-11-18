@@ -4,6 +4,22 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
+    function isAdmin() {
+      return request.auth != null
+        && request.auth.token.get('campusRole', '') == 'admin';
+    }
+
+    function isLegacyModerator() {
+      let moderatorProfile = /databases/$(database)/documents/users/$(request.auth.uid);
+      return request.auth != null
+        && exists(moderatorProfile)
+        && get(moderatorProfile).data.role == 'moderator';
+    }
+
+    function isSpaceStaff() {
+      return isAdmin() || isLegacyModerator();
+    }
+
     // ==========================================
     // DEFAULT DENY
     // ==========================================
@@ -287,10 +303,9 @@ service cloud.firestore {
         }
 
         function targetSpaceOwnerOrStaff() {
-          let staffPath = /databases/$(database)/documents/users/$(request.auth.uid);
           return exists(targetSpacePath())
             && (get(targetSpacePath()).data.createdBy == request.auth.uid
-              || (exists(staffPath) && get(staffPath).data.role in ['admin', 'moderator']));
+              || isSpaceStaff());
         }
 
         allow get, list: if request.auth != null && request.auth.uid == uid;
@@ -671,9 +686,7 @@ service cloud.firestore {
       }
 
       function isStaff() {
-        return signedIn()
-          && exists(userPath())
-          && get(userPath()).data.role in ['admin', 'moderator'];
+        return isSpaceStaff();
       }
 
       function isSameCampus() {

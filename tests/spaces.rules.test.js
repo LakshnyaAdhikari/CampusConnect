@@ -30,8 +30,8 @@ const now = () => Timestamp.fromMillis(1_700_000_000_000)
 
 let testEnv
 
-function dbFor(uid) {
-  return testEnv.authenticatedContext(uid).firestore()
+function dbFor(uid, claims = {}) {
+  return testEnv.authenticatedContext(uid, claims).firestore()
 }
 
 function profile(uid, campus = 'North Campus', role = 'student') {
@@ -168,9 +168,9 @@ function addSpaceDecisionNotification(batch, db, reviewerUid, requesterUid, noti
   }))
 }
 
-async function assertStaffCannotApproveOwnRequest(uid) {
+async function assertStaffCannotApproveOwnRequest(uid, claims = {}) {
   await seed({ visibility: 'private', members: ['alice'], withPost: false })
-  const db = dbFor(uid)
+  const db = dbFor(uid, claims)
   const requestRef = doc(db, `${SPACE_PATH}/joinRequests/${uid}`)
   await createPendingJoinRequest(uid)
 
@@ -720,7 +720,7 @@ test('a moderator cannot approve their own private join request', async () => {
 })
 
 test('an admin cannot approve their own private join request', async () => {
-  await assertStaffCannotApproveOwnRequest('admin')
+  await assertStaffCannotApproveOwnRequest('admin', { campusRole: 'admin' })
 })
 
 test('stale approved requests cannot be reused after a member leaves', async () => {
@@ -1011,7 +1011,7 @@ test('content authors and staff can delete posts and comments', async () => {
         comment(),
       )
     })
-    const staffDb = dbFor(staffUid)
+    const staffDb = dbFor(staffUid, staffUid === 'admin' ? { campusRole: 'admin' } : {})
     await assertSucceeds(
       deleteDoc(doc(staffDb, `${SPACE_PATH}/posts/staff-target-${staffUid}`)),
     )

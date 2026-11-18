@@ -8,7 +8,7 @@ import { ensureUserProfile, getUser } from '../features/profile/service'
 
 const Context = createContext(null)
 
-// --- localStorage profile cache (bridges page-refresh gap until Firestore profile service is implemented) ---
+// Cached profile presentation data never includes authorization state.
 const CACHE_KEY = uid => `cc_profile_${uid}`
 
 const cacheProfile = profile => {
@@ -16,8 +16,7 @@ const cacheProfile = profile => {
     if (profile?.uid) {
       localStorage.setItem(CACHE_KEY(profile.uid), JSON.stringify({
         onboarded: profile.onboarded,
-        role: profile.role,
-        name: profile.name
+        name: profile.name,
       }))
     }
   } catch { /* storage unavailable */ }
@@ -30,17 +29,33 @@ const readCachedProfile = uid => {
 const clearCachedProfile = uid => {
   try { if (uid) localStorage.removeItem(CACHE_KEY(uid)) } catch { /* ignore */ }
 }
-// ---
+
+const authorizationRole = (firebaseUser, profile, claims = {}) => {
+  if (!firebaseUser) return null
+  if (claims.campusRole === 'admin') return 'admin'
+  // Legacy moderators keep only the Space moderation rights enforced by Rules.
+  // A Firestore profile value of "admin" is deliberately not an admin grant.
+  if (profile?.role === 'moderator') return 'moderator'
+  return 'student'
+}
+
+const presentProfile = (profile, role) => profile ? { ...profile, role } : null
 
 export const AuthProvider = ({ children }) => {
-  const [user, setUser] = useState(null),
-    [profile, setProfile] = useState(null),
-    [loading, setLoading] = useState(true)
+  const [user, setUser] = useState(null)
+  const [profile, setProfile] = useState(null)
+  const [role, setRole] = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [roleLoading, setRoleLoading] = useState(true)
 
   const sync = () => {
-    const p = store.users.find(x => x.uid === store.currentUid)
-    setUser(p ? { uid: p.uid, email: p.email } : null)
-    setProfile(p ? clone(p) : null)
+    const storedProfile = store.users.find(item => item.uid === store.currentUid)
+    const mockUser = storedProfile ? { uid: storedProfile.uid, email: storedProfile.email } : null
+    const mockRole = storedProfile?.role || authorizationRole(mockUser, storedProfile, {})
+    setUser(mockUser)
+    setProfile(presentProfile(storedProfile ? clone(storedProfile) : null, mockRole))
+    setRole(mockRole)
+    setRoleLoading(false)
     setLoading(false)
   }
 
@@ -52,84 +67,150 @@ export const AuthProvider = ({ children }) => {
 
     if (!auth) {
       setLoading(false)
-      return
+      setRoleLoading(false)
+      return undefined
     }
 
-    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
-      if (firebaseUser) {
-        const u = {
-          uid: firebaseUser.uid,
-          email: firebaseUser.email,
-          displayName: firebaseUser.displayName,
-          photoURL: firebaseUser.photoURL
-        }
-        setUser(u)
-        try {
-          const p = await ensureUserProfile(firebaseUser)
-          setProfile(p)
-          cacheProfile(p)
-        } catch {
-          const cached = readCachedProfile(firebaseUser.uid)
-          setProfile(prev => (prev && prev.uid === firebaseUser.uid) ? prev : {
-            uid: firebaseUser.uid,
-            id: firebaseUser.uid,
-            name: cached?.name || firebaseUser.displayName || firebaseUser.email?.split('@')[0] || 'Student',
-            email: firebaseUser.email || '',
-            campus: '',
-            role: cached?.role || 'student',
-            interests: [],
-            teach: [],
-            learn: [],
-            lookingFor: [],
-            bio: '',
-            photoURL: firebaseUser.photoURL || '',
-            discoverable: true,
-            onboarded: cached?.onboarded ?? false,
-            createdAt: Date.now()
-          })
-        }
-      } else {
+    let loadSequence = 0
+    const unsubscribe = onAuthStateChanged(auth, async firebaseUser => {
+      const sequence = ++loadSequence
+      setLoading(true)
+
+      if (!firebaseUser) {
         setUser(null)
         setProfile(null)
+        setRole(null)
+        setRoleLoading(false)
+        setLoading(false)
+        return
       }
+
+      const nextUser = {
+        uid: firebaseUser.uid,
+        email: firebaseUser.email,
+        displayName: firebaseUser.displayName,
+        photoURL: firebaseUser.photoURL,
+      }
+      setUser(nextUser)
+      setRoleLoading(true)
+
+      let claims = {}
+      try {
+        claims = (await firebaseUser.getIdTokenResult()).claims || {}
+      } catch (error) {
+        console.error('Could not load Firebase authorization claims:', error)
+      }
+
+      let loadedProfile
+      try {
+        loadedProfile = await ensureUserProfile(firebaseUser)
+      } catch (error) {
+        console.error('Could not load the Firebase user profile:', error)
+        const cached = readCachedProfile(firebaseUser.uid)
+        loadedProfile = {
+          uid: firebaseUser.uid,
+          id: firebaseUser.uid,
+          name: cached?.name || firebaseUser.displayName || firebaseUser.email?.split('@')[0] || 'Student',
+          email: firebaseUser.email || '',
+          campus: '',
+          interests: [],
+          teach: [],
+          learn: [],
+          lookingFor: [],
+          bio: '',
+          photoURL: firebaseUser.photoURL || '',
+          discoverable: true,
+          onboarded: cached?.onboarded ?? false,
+          createdAt: Date.now(),
+        }
+      }
+
+      if (sequence !== loadSequence) return
+      const resolvedRole = authorizationRole(firebaseUser, loadedProfile, claims)
+      setRole(resolvedRole)
+      setProfile(presentProfile(loadedProfile, resolvedRole))
+      cacheProfile(loadedProfile)
+      setRoleLoading(false)
       setLoading(false)
     })
 
-    return () => unsubscribe()
+    return () => {
+      loadSequence += 1
+      unsubscribe()
+    }
   }, [])
+
+  const refreshAuthorization = async () => {
+    if (isMock('auth')) {
+      sync()
+      return role
+    }
+    const firebaseUser = auth?.currentUser
+    if (!firebaseUser) {
+      setRole(null)
+      setProfile(null)
+      setRoleLoading(false)
+      return null
+    }
+
+    setRoleLoading(true)
+    try {
+      // An administrator claim assigned while the user was signed in is only
+      // available to Rules after the ID token has been refreshed.
+      const tokenResult = await firebaseUser.getIdTokenResult(true)
+      const resolvedRole = authorizationRole(firebaseUser, profile, tokenResult.claims || {})
+      setRole(resolvedRole)
+      setProfile(current => presentProfile(current, resolvedRole))
+      return resolvedRole
+    } finally {
+      setRoleLoading(false)
+    }
+  }
 
   const wrap = fn => async (...args) => {
     const result = await fn(...args)
     if (isMock('auth')) {
       sync()
     } else if (result && result.uid) {
+      const firebaseUser = auth?.currentUser?.uid === result.uid ? auth.currentUser : null
+      let claims = {}
+      try {
+        if (firebaseUser) claims = (await firebaseUser.getIdTokenResult()).claims || {}
+      } catch (error) {
+        console.error('Could not load Firebase authorization claims:', error)
+      }
+      const resolvedRole = authorizationRole(firebaseUser, result, claims)
       setUser({
         uid: result.uid,
         email: result.email,
         displayName: result.displayName || result.name,
-        photoURL: result.photoURL
+        photoURL: result.photoURL,
       })
-      setProfile(result)
+      setRole(resolvedRole)
+      setProfile(presentProfile(result, resolvedRole))
+      setRoleLoading(false)
+      setLoading(false)
       cacheProfile(result)
     } else if (fn === authService.signOutUser) {
       clearCachedProfile(user?.uid)
       setUser(null)
       setProfile(null)
+      setRole(null)
+      setRoleLoading(false)
     }
     return result
   }
 
   const refreshProfile = async () => {
-    if (user) {
-      try {
-        const p = await getUser(user.uid)
-        if (p) {
-          setProfile(p)
-          cacheProfile(p)
-        }
-      } catch {
-        // Fallback gracefully if getUser is not implemented yet
+    if (!user) return
+    try {
+      const nextProfile = await getUser(user.uid)
+      if (nextProfile) {
+        setProfile(presentProfile(nextProfile, role))
+        cacheProfile(nextProfile)
       }
+    } catch (error) {
+      console.error('Could not refresh the user profile:', error)
     }
   }
 
@@ -138,13 +219,16 @@ export const AuthProvider = ({ children }) => {
       value={{
         user,
         profile,
-        role: profile?.role,
+        role,
+        isAdmin: role === 'admin',
         loading,
+        roleLoading,
         signUp: wrap(authService.signUpEmail),
         signIn: wrap(authService.signInEmail),
         signInWithGoogle: wrap(authService.signInGoogle),
         signOut: wrap(authService.signOutUser),
-        refreshProfile
+        refreshProfile,
+        refreshAuthorization,
       }}
     >
       {children}

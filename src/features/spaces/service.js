@@ -601,7 +601,15 @@ export const createPost = async (spaceId, { text, isAnonymous = false }) => {
 
 const mayModerate = async (firestore, uid) => {
   const profile = await getOwnProfile(firestore, uid)
-  return profile.role === 'admin' || profile.role === 'moderator'
+  if (profile.role === 'moderator') return true
+  const firebaseUser = auth?.currentUser
+  if (!firebaseUser || firebaseUser.uid !== uid) return false
+  try {
+    const token = await firebaseUser.getIdTokenResult()
+    return token.claims.campusRole === 'admin'
+  } catch {
+    return false
+  }
 }
 
 export const deletePost = async (spaceId, targetPostId) => {
