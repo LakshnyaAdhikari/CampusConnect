@@ -5,6 +5,7 @@ import {
   Check,
   Compass,
   Heart,
+  LockKeyhole,
   MessageCircle,
   Plus,
   Search,
@@ -40,7 +41,7 @@ export default function Spaces() {
   const [selectedCategory, setSelectedCategory] = useState('All')
   const [search, setSearch] = useState('')
   const [openModal, setOpenModal] = useState(false)
-  const [modalFormData, setModalFormData] = useState({ name: '', description: '', category: 'Tech & Coding' })
+  const [modalFormData, setModalFormData] = useState({ name: '', description: '', category: 'Tech & Coding', visibility: 'public' })
   const [modalSaving, setModalSaving] = useState(false)
   const [likesMap, setLikesMap] = useState({})
   const [joiningMap, setJoiningMap] = useState({})
@@ -51,7 +52,7 @@ export default function Spaces() {
 
   const load = () => {
     setError('')
-    listSpaces(profile.campus)
+    listSpaces()
       .then(setSpaces)
       .catch(() => setError('Spaces could not be loaded. Try again.'))
   }
@@ -82,15 +83,17 @@ export default function Spaces() {
     }
     try {
       setModalSaving(true)
-      await createSpace({
+      const created = await createSpace({
         name: formData.name.trim(),
         description: formData.description.trim(),
         category: formData.category || 'Tech & Coding',
+        visibility: formData.visibility || 'public',
       })
       toast('Your space is ready!')
-      setModalFormData({ name: '', description: '', category: 'Tech & Coding' })
+      setModalFormData({ name: '', description: '', category: 'Tech & Coding', visibility: 'public' })
       setOpenModal(false)
       load()
+      if (created?.visibility === 'private') navigate(`/spaces/${created.id}`)
     } catch (err) {
       toast(err.message || 'Could not create space', 'error')
     } finally {
@@ -168,7 +171,7 @@ export default function Spaces() {
           </span>
           <div>
             <span className="block text-sm font-bold text-[#1D1A39]">✨ Discover &amp; Join Spaces</span>
-            <small className="block text-xs text-muted">Trending circles across {profile.campus}</small>
+          <small className="block text-xs text-muted">Discover public circles across every campus</small>
           </div>
         </button>
 
@@ -293,6 +296,7 @@ export default function Spaces() {
           <div className="space-y-6">
             {filteredSpaces.map((space, idx) => {
               const isUserMember = space.members?.includes(user?.uid)
+              const visibility = space.visibility ?? 'campus'
               const isJoining = joiningMap[space.id]
               const isLiked = Boolean(likesMap[space.id])
               const latestPost = space.posts?.[0]
@@ -325,6 +329,10 @@ export default function Spaces() {
                           </Link>
                           <span className="rounded-full bg-[#E8BCB9]/30 px-2.5 py-0.5 text-[11px] font-semibold text-[#662549]">
                             {space.category || 'Campus Life'}
+                          </span>
+                          <span className="inline-flex items-center gap-1 rounded-full bg-surface px-2 py-0.5 text-[11px] font-semibold text-[#662549]">
+                            {visibility === 'private' ? <LockKeyhole size={12} /> : <Users size={12} />}
+                            {visibility === 'private' ? 'Private' : visibility === 'campus' ? 'Campus' : 'Public'}
                           </span>
                         </div>
                         <div className="flex items-center gap-2 text-xs text-muted mt-0.5">
@@ -495,6 +503,19 @@ export default function Spaces() {
               value={modalFormData.description}
               onChange={e => setModalFormData({ ...modalFormData, description: e.target.value })}
             />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-[#1D1A39] mb-1">Visibility</label>
+            <select
+              value={modalFormData.visibility}
+              onChange={e => setModalFormData({ ...modalFormData, visibility: e.target.value })}
+              className="mt-1 w-full rounded-xl border border-line bg-surface px-3 py-2 text-sm text-ink focus:outline-none"
+            >
+              <option value="public">Public — discoverable across campuses</option>
+              <option value="private">Private — membership requires approval</option>
+            </select>
+            <p className="mt-1 text-xs text-muted">Private spaces are not listed publicly. Share the space link to accept requests.</p>
           </div>
 
           <Button

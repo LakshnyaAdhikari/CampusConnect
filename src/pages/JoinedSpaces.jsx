@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react'
-import { ArrowLeft, Check, Compass, MessageCircle, Plus, Search, Sparkles, Users } from 'lucide-react'
+import { ArrowLeft, Check, Compass, LockKeyhole, MessageCircle, Plus, Search, Sparkles, Users } from 'lucide-react'
 import { Link, useNavigate } from 'react-router-dom'
 import { Button, Card, ConfirmDialog, EmptyState, Input, Spinner, useToast } from '../components/ui'
-import { listSpaces, leaveSpace } from '../features/spaces/service'
+import { listJoinedSpaces, leaveSpace } from '../features/spaces/service'
 import { useAuth } from '../context/AuthContext'
 
 export default function JoinedSpaces() {
@@ -16,7 +16,7 @@ export default function JoinedSpaces() {
 
   const load = () => {
     setLoading(true)
-    listSpaces(profile.campus)
+    listJoinedSpaces()
       .then(all => {
         const joined = (all || []).filter(s => s.members?.includes(user.uid))
         setSpaces(joined)
@@ -87,12 +87,17 @@ export default function JoinedSpaces() {
         <div className="grid gap-5 md:grid-cols-2">
           {filtered.map(space => {
             const latestPost = space.posts?.[0]
+            const visibility = space.visibility ?? 'campus'
             return (
               <Card key={space.id} className="flex flex-col justify-between overflow-hidden p-0 border border-[#E8BCB9]/30 shadow-sm hover:shadow-md transition">
                 <div className="bg-gradient-to-r from-[#451952] to-[#662549] p-5 text-white">
                   <div className="flex items-center justify-between">
                     <span className="rounded-full bg-white/20 px-2.5 py-0.5 text-xs font-semibold backdrop-blur">
                       {space.category || 'Campus Life'}
+                    </span>
+                    <span className="inline-flex items-center gap-1 rounded-full bg-white/10 px-2.5 py-0.5 text-xs text-white/90">
+                      {visibility === 'private' && <LockKeyhole size={12} />}
+                      {visibility === 'private' ? 'Private' : visibility === 'campus' ? 'Campus' : 'Public'}
                     </span>
                     <span className="rounded-full bg-white/10 px-2.5 py-0.5 text-xs text-white/90">
                       {space.campus}

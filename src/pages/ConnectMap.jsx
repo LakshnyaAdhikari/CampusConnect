@@ -1,154 +1,136 @@
-import { useEffect, useState } from 'react'
-import { useAuth } from '../context/AuthContext'
-import { useNavigate } from 'react-router-dom'
-import { sendRequest } from '../features/connections/service'
-import { openChat } from '../features/messages/service'
-import { store } from '../lib/mockData'
-import { Button } from '../components/ui'
+import { useState } from 'react'
+import { Link } from 'react-router-dom'
+import { Sparkles, Network, Users, Compass, BellRing, ArrowRight, Check } from 'lucide-react'
+import { Button, Card, useToast } from '../components/ui'
 
-export default function ConnectMap(){
-  const {profile,loading}=useAuth()
-  const nav=useNavigate()
-  const [mode,setMode]=useState('radial')
-  const [filter,setFilter]=useState('all')
-  const [selected,setSelected]=useState(null)
-  const [graph,setGraph]=useState({nodes:[],links:[]})
+export default function ConnectMap() {
+  const [notified, setNotified] = useState(false)
+  const toast = useToast()
 
-  useEffect(()=>{
-    if(!profile||loading)return
-    const uid=profile.uid
-    const accepted=store.connections.filter(c=>c.status==='accepted')
-    const firstDegree=accepted.filter(c=>c.fromUid===uid||c.toUid===uid).map(c=>c.fromUid===uid?c.toUid:c.fromUid)
-    const secondDegree=[]
-    const secondLinks=[]
-    accepted.forEach(c=>{
-      if(firstDegree.includes(c.fromUid)&&c.toUid!==uid&&!firstDegree.includes(c.toUid)){
-        secondDegree.push(c.toUid)
-        secondLinks.push({source:c.fromUid,target:c.toUid})
-      }
-      if(firstDegree.includes(c.toUid)&&c.fromUid!==uid&&!firstDegree.includes(c.fromUid)){
-        secondDegree.push(c.fromUid)
-        secondLinks.push({source:c.toUid,target:c.fromUid})
-      }
-    })
-    const uniqueSecond=[...new Set(secondDegree)]
-    const nodes=[
-      {uid, name:profile.name||'You', type:'root'},
-      ...firstDegree.map(id=>({uid:id,name:store.users.find(u=>u.uid===id)?.name||'?',type:'first'})),
-      ...uniqueSecond.map(id=>({uid:id,name:store.users.find(u=>u.uid===id)?.name||'?',type:'second'}))
-    ]
-    const firstLinks=firstDegree.map(id=>({source:uid,target:id}))
-    const links=[...firstLinks,...secondLinks]
-    setGraph({nodes,links})
-  },[profile,loading])
-
-  const handleConnect=node=>{
-    if(!profile)return
-    sendRequest(profile.uid,node.uid)
-  }
-
-  const handleMessage=node=>{
-    if(!profile)return
-    openChat(profile.uid,node.uid)
-  }
-
-  const filteredNodes=graph.nodes.filter(n=>{
-    if(filter==='all')return true
-    if(filter==='2plus') return n.type==='second' && graph.links.filter(l=>l.target===n.uid||l.source===n.uid).length>=2
-    if(filter==='same') return n.type!=='root' && store.users.find(u=>u.uid===n.uid)?.campus===profile.campus
-    return true
-  })
-
-  const filteredLinks=graph.links.filter(l=>filteredNodes.some(n=>n.uid===l.source) && filteredNodes.some(n=>n.uid===l.target))
-
-  const radius=200
-  const angleStep=Math.PI*2/Math.max(1,filteredNodes.filter(n=>n.type!=='root').length)
-  const positions={}
-  filteredNodes.forEach((n,i)=>{
-    if(n.type==='root') positions[n.uid]={x:0,y:0}
-    else {
-      const idx=filteredNodes.filter(m=>m.type!=="root").indexOf(n)
-      const r=n.type==='first'?radius:radius*1.6
-      const ang=idx*angleStep
-      positions[n.uid]={x:r*Math.cos(ang),y:r*Math.sin(ang)}
+  const handleNotifyMe = () => {
+    setNotified(prev => !prev)
+    if (!notified) {
+      toast("You're on the list! We'll notify you as soon as ConnectMap goes live.")
+    } else {
+      toast('Notification preference updated.')
     }
-  })
+  }
 
   return (
-    <div className="flex h-screen overflow-hidden bg-background text-ink">
-      <div className="flex-1 relative p-4 overflow-auto">
-        <div className="flex gap-4 mb-4">
-          <Button onClick={()=>setMode('radial')} className={mode==='radial'?'bg-primary-50 text-primary':'text-muted'}>Radial Community Web</Button>
-          <Button onClick={()=>setMode('tree')} className={mode==='tree'?'bg-primary-50 text-primary':'text-muted'}>Mutual Hierarchy Tree</Button>
-          <Button onClick={()=>setFilter('all')} className={filter==='all'?'bg-primary-50 text-primary':'text-muted'}>All Circle</Button>
-          <Button onClick={()=>setFilter('2plus')} className={filter==='2plus'?'bg-primary-50 text-primary':'text-muted'}>2+ Mutuals</Button>
-          <Button onClick={()=>setFilter('same')} className={filter==='same'?'bg-primary-50 text-primary':'text-muted'}>Same Campus</Button>
-        </div>
-        {mode==='radial' && (
-          <svg viewBox="-250 -250 500 500" className="w-full h-full" preserveAspectRatio="xMidYMid meet">
-            {filteredLinks.map((l,i)=>(
-              <line key={i} x1={positions[l.source].x} y1={positions[l.source].y} x2={positions[l.target].x} y2={positions[l.target].y} stroke={l.source===profile.uid? '#AE445A' : '#F39F5A'} strokeDasharray={l.source===profile.uid? '' : '4 2'} strokeWidth={2} />
-            ))}
-            {filteredNodes.map((n,i)=>(
-              <g key={i} transform={`translate(${positions[n.uid].x},${positions[n.uid].y})`} onClick={()=>setSelected(n)} className="cursor-pointer">
-                <circle r={n.type==='root'?30:20} fill={n.type==='root'?'#1D1A39':n.type==='first'?'#451952':'#AE445A'} stroke="#fff" strokeWidth={2} />
-                <text x={0} y={5} textAnchor="middle" className="text-white text-xs font-medium" dominantBaseline="middle">{n.name}</text>
-                {n.type==='second' && (
-                  <text x={0} y={-25} textAnchor="middle" className="text-[#F39F5A] text-xxs font-bold">🔥 {graph.links.filter(l=>l.target===n.uid||l.source===n.uid).length}</text>
-                )}
-              </g>
-            ))}
-          </svg>
-        )}
-        {mode==='tree' && (
-          <div className="space-y-2">
-            <div className="flex items-center gap-2">
-              <div className="w-4 h-4 rounded-full bg-[#1D1A39]" />
-              <span className="font-bold text-[#1D1A39]">You</span>
-            </div>
-            {graph.nodes.filter(n=>n.type==='first').map(first=>(
-              <div key={first.uid} className="ml-6">
-                <div className="flex items-center gap-2">
-                  <div className="w-4 h-4 rounded-full bg-[#451952]" />
-                  <span className="font-medium text-[#451952]">{first.name}</span>
-                </div>
-                {graph.nodes.filter(n=>n.type==='second' && graph.links.some(l=> (l.source===first.uid && l.target===n.uid) || (l.target===first.uid && l.source===n.uid))).map(sec=>(
-                  <div key={sec.uid} className="ml-6 flex items-center gap-2">
-                    <div className="w-4 h-4 rounded-full bg-[#AE445A]" />
-                    <span className="text-[#AE445A]">{sec.name}</span>
-                  </div>
-                ))}
-              </div>
-            ))}
+    <div className="mx-auto max-w-5xl space-y-8 py-2">
+      <div className="relative overflow-hidden rounded-[28px] bg-gradient-to-br from-[#1D1A39] via-[#451952] to-[#662549] p-8 text-white shadow-card">
+        <div className="relative z-10 max-w-2xl">
+          <span className="inline-flex items-center gap-2 rounded-full bg-[#F39F5A] px-3.5 py-1 text-xs font-bold uppercase tracking-wider text-[#1D1A39] shadow-sm">
+            <Sparkles size={14} /> 🚀 Coming Soon • Future Release
+          </span>
+          <h1 className="mt-4 text-3xl font-extrabold tracking-tight sm:text-5xl text-white">
+            ConnectMap
+          </h1>
+          <p className="mt-3 text-base sm:text-lg text-[#E8BCB9] leading-relaxed">
+            Visualizing mutual connection bridges and campus community circles as an interactive, living network tree.
+          </p>
+
+          <div className="mt-6 flex flex-wrap items-center gap-3">
+            <Button
+              onClick={handleNotifyMe}
+              className={`inline-flex items-center gap-2 rounded-xl px-5 py-2.5 font-semibold text-sm transition shadow-sm ${
+                notified
+                  ? 'bg-[#E8BCB9] text-[#1D1A39] hover:bg-white'
+                  : 'bg-[#F39F5A] text-[#1D1A39] hover:bg-[#F39F5A]/90'
+              }`}
+            >
+              {notified ? (
+                <>
+                  <Check size={16} /> Subscribed to Updates
+                </>
+              ) : (
+                <>
+                  <BellRing size={16} /> Notify Me When Live
+                </>
+              )}
+            </Button>
+            <Link
+              to="/discover"
+              className="inline-flex items-center gap-2 rounded-xl border border-white/25 bg-white/10 px-5 py-2.5 text-sm font-semibold text-white backdrop-blur hover:bg-white/20 transition"
+            >
+              <Compass size={16} /> Explore Discover Instead <ArrowRight size={15} />
+            </Link>
           </div>
-        )}
+        </div>
+
+        <div className="pointer-events-none select-none absolute -right-10 -bottom-10 opacity-15 text-white">
+          <Network size={360} />
+        </div>
       </div>
-      {selected && (
-        <div className="w-64 border-l border-line bg-surface p-4 overflow-y-auto">
-          <div className="flex flex-col items-center gap-2 mb-4">
-            <div className="w-24 h-24 rounded-full bg-secondary flex items-center justify-center text-2xl font-bold text-primary">
-              {selected.name?.[0] ?? '?'}
-            </div>
-            <h2 className="text-xl font-extrabold text-[#1D1A39]">{selected.name}</h2>
-            <span className="rounded-full bg-primary-50 border border-primary/20 px-2.5 py-0.5 text-xs font-bold uppercase tracking-wider text-primary">
-              {selected.type==='first'?'1st Degree Connection':selected.type==='second'?'2nd Degree • Mutual Connection':'You'}
-            </span>
-            <p className="text-sm text-berry">{store.users.find(u=>u.uid===selected.uid)?.campus}</p>
+
+      <div className="relative overflow-hidden rounded-3xl border border-line bg-surface p-6 sm:p-8 shadow-card">
+        <div className="absolute inset-0 bg-gradient-to-b from-transparent via-background/40 to-background/90 backdrop-blur-[2px] z-10 flex flex-col items-center justify-center p-6 text-center">
+          <span className="grid h-16 w-16 place-items-center rounded-2xl bg-gradient-to-br from-[#451952] to-[#AE445A] text-white shadow-card mb-4">
+            <Network size={32} />
+          </span>
+          <h2 className="text-xl sm:text-2xl font-bold text-[#1D1A39]">
+            Interactive Community Graph in Active Development
+          </h2>
+          <p className="mt-2 max-w-md text-sm text-muted">
+            Our team is fine-tuning the force-directed physics engine to map campus connections with fluid 60 FPS transitions.
+          </p>
+          <div className="mt-5 flex items-center gap-3">
+            <Button
+              onClick={handleNotifyMe}
+              className="bg-[#451952] text-white hover:bg-[#662549] text-xs sm:text-sm px-4 py-2"
+            >
+              {notified ? 'Notification Saved ✓' : 'Get Early Access Notification'}
+            </Button>
           </div>
-          <div className="mb-4">
-            <h3 className="font-semibold text-[#1D1A39] mb-2">Mutual Bridges</h3>
-            <p className="text-sm">
-              {graph.links.filter(l=> (l.source===profile.uid && l.target===selected.uid) || (l.target===profile.uid && l.source===selected.uid)).map(l=>store.users.find(u=>u.uid===l.source&&u.uid!==profile.uid||u.uid===l.target&&u.uid!==profile.uid).name).join(' & ') || 'None'}
-            </p>
-          </div>
-          <div className="flex flex-col gap-2">
-            <Button onClick={()=>handleConnect(selected)} className="bg-[#AE445A] text-white hover:bg-[#AE445A]/80">Connect</Button>
-            <Button onClick={()=>handleMessage(selected)} className="bg-[#F39F5A] text-[#1D1A39] hover:bg-[#F39F5A]/80">Message</Button>
-            <Button onClick={()=>nav('/profile/'+selected.uid)} className="bg-primary-50 text-primary hover:bg-primary-50/80">View Full Profile →</Button>
-          </div>
-          <button onClick={()=>setSelected(null)} className="absolute top-2 right-2 text-muted hover:text-primary">✕</button>
         </div>
-      )}
+
+        <div className="opacity-25 filter blur-xs select-none pointer-events-none py-10">
+          <div className="flex justify-center items-center gap-8">
+            <div className="h-16 w-16 rounded-full bg-[#451952] flex items-center justify-center text-white font-bold">You</div>
+            <div className="h-0.5 w-24 bg-[#AE445A]"></div>
+            <div className="h-14 w-14 rounded-full bg-[#AE445A] flex items-center justify-center text-white font-bold">Aanya</div>
+            <div className="h-0.5 w-24 border-t-2 border-dashed border-[#F39F5A]"></div>
+            <div className="h-12 w-12 rounded-full bg-[#F39F5A] flex items-center justify-center text-[#1D1A39] font-bold">Rohan</div>
+          </div>
+          <div className="mt-8 flex justify-center items-center gap-16">
+            <div className="h-12 w-12 rounded-full bg-[#662549] flex items-center justify-center text-white font-bold">Maya</div>
+            <div className="h-12 w-12 rounded-full bg-[#AE445A] flex items-center justify-center text-white font-bold">Nisha</div>
+            <div className="h-12 w-12 rounded-full bg-[#F39F5A] flex items-center justify-center text-[#1D1A39] font-bold">Arjun</div>
+          </div>
+        </div>
+      </div>
+
+      <div className="grid gap-5 md:grid-cols-3">
+        <Card className="border border-line/70 p-6">
+          <span className="grid h-10 w-10 place-items-center rounded-xl bg-[#451952]/10 text-[#451952]">
+            <Network size={20} />
+          </span>
+          <h3 className="mt-4 font-bold text-base text-[#1D1A39]">1st-Degree Inner Circle</h3>
+          <p className="mt-1.5 text-xs text-muted leading-relaxed">
+            See everyone you are directly connected with in real-time, grouped naturally by campus spaces and shared skills.
+          </p>
+        </Card>
+
+        <Card className="border border-line/70 p-6">
+          <span className="grid h-10 w-10 place-items-center rounded-xl bg-[#AE445A]/10 text-[#AE445A]">
+            <Users size={20} />
+          </span>
+          <h3 className="mt-4 font-bold text-base text-[#1D1A39]">2nd-Degree Mutual Bridges</h3>
+          <p className="mt-1.5 text-xs text-muted leading-relaxed">
+            Discover peers connected through your friends with clear "Mutual via" links to break the ice with warm intros.
+          </p>
+        </Card>
+
+        <Card className="border border-line/70 p-6">
+          <span className="grid h-10 w-10 place-items-center rounded-xl bg-[#F39F5A]/20 text-[#662549]">
+            <Compass size={20} />
+          </span>
+          <h3 className="mt-4 font-bold text-base text-[#1D1A39]">Campus Skill Clusters</h3>
+          <p className="mt-1.5 text-xs text-muted leading-relaxed">
+            Filter your tree by teach and learn tags to pinpoint hackathon partners, exam study squads, and creative peers.
+          </p>
+        </Card>
+      </div>
     </div>
   )
 }

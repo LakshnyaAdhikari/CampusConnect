@@ -1,1 +1,25 @@
-export default { content: ['./index.html', './src/**/*.{js,jsx}'], theme: { extend: { fontFamily: { sans: ['Inter', 'sans-serif'] }, colors: { primary: { DEFAULT: '#451952', 50: '#F8EDEE', 600: '#1D1A39' }, secondary: '#F39F5A', background: '#FFF8F5', surface: '#FFFFFF', ink: '#1D1A39', muted: '#6B2549', line: '#E8BCB9', berry: '#6B2549', rose: '#AE445A', apricot: '#F39F5A', blush: '#E8BCB9', danger: '#AE445A' }, boxShadow: { card: '0 10px 30px rgba(69,25,82,.10)' } } }, plugins: [] }
+export default {
+  darkMode: 'class',
+  content: ['./index.html', './src/**/*.{js,jsx}'],
+  theme: {
+    extend: {
+      fontFamily: { sans: ['Inter', 'sans-serif'] },
+      colors: {
+        primary: { DEFAULT: '#451952', 50: '#F8EDEE', 600: '#1D1A39' },
+        secondary: '#F39F5A',
+        background: '#FFF8F5',
+        surface: '#FFFFFF',
+        ink: '#1D1A39',
+        muted: '#6B2549',
+        line: '#E8BCB9',
+        berry: '#6B2549',
+        rose: '#AE445A',
+        apricot: '#F39F5A',
+        blush: '#E8BCB9',
+        danger: '#AE445A'
+      },
+      boxShadow: { card: '0 10px 30px rgba(69,25,82,.10)' }
+    }
+  },
+  plugins: []
+}

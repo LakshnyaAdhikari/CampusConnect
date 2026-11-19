@@ -2,10 +2,10 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { ArrowLeft, ArrowRight, BookOpen, Check, GraduationCap, MessageCircle, Sparkles, Users, X, Zap } from 'lucide-react'
 import { Avatar, Button, Card, Input, Select, Spinner, Tag, Textarea, useToast } from '../components/ui'
-import { getUser, updateUser } from '../features/profile/service'
+import { getPublicUser, updateUser } from '../features/profile/service'
 import { openChat } from '../features/messages/service'
 import { cancelRequest, respondRequest, sendRequest } from '../features/connections/service'
-import { listSpaces } from '../features/spaces/service'
+import { listJoinedSpaces, listSpaces } from '../features/spaces/service'
 import { useAuth } from '../context/AuthContext'
 import { useConnectionStatus } from '../features/connections/hooks'
 import { ReportButton } from '../features/admin/components/ReportButton'
@@ -35,7 +35,7 @@ export default function Profile() {
         setLoading(false)
       }
     } else {
-      getUser(targetUid)
+      getPublicUser(targetUid)
         .then(res => {
           setP(res)
           setLoading(false)
@@ -48,10 +48,9 @@ export default function Profile() {
   }, [uid, profile, own, targetUid])
 
   useEffect(() => {
-    listSpaces()
-      .then(res => setSpaces(res || []))
-      .catch(() => {})
-  }, [])
+    const spacesRequest = own ? listJoinedSpaces() : listSpaces()
+    spacesRequest.then(res => setSpaces(res || [])).catch(() => {})
+  }, [profile?.campus, own, user?.uid])
 
   const matchData = useMemo(() => {
     if (own || !profile || !p) {
@@ -132,7 +131,19 @@ export default function Profile() {
   const handleSave = async () => {
     setSaving(true)
     try {
-      await updateUser(user.uid, p)
+      const profileData = {
+        name: p.name,
+        campus: p.campus,
+        interests: p.interests || [],
+        teach: p.teach || [],
+        learn: p.learn || [],
+        lookingFor: p.lookingFor || [],
+        bio: p.bio || '',
+        photoURL: p.photoURL || '',
+        discoverable: p.discoverable ?? true,
+      }
+
+      await updateUser(user.uid, profileData)
       await refreshProfile()
       toast('Profile updated successfully!')
     } catch (err) {
@@ -201,7 +212,7 @@ export default function Profile() {
                 {status === 'accepted' && (
                   <span className="inline-flex items-center gap-1.5 rounded-xl bg-primary-50 px-3.5 py-2 font-bold text-primary text-xs sm:text-sm border border-primary/20">
                     <Check size={15} />
-                    Connected âœ“
+                    Connected G£ô
                   </span>
                 )}
 
@@ -210,7 +221,7 @@ export default function Profile() {
                   Send Message
                 </Button>
 
-                <ReportButton targetType="user" targetId={targetUid} />
+                <ReportButton targetType="profile" targetId={targetUid} />
               </div>
             )}
           </div>
@@ -247,12 +258,28 @@ export default function Profile() {
                     <option key={c} value={c}>{c}</option>
                   ))}
                 </Select>
+                <Input
+                  type="url"
+                  value={p.photoURL || ''}
+                  onChange={e => setP({ ...p, photoURL: e.target.value })}
+                  placeholder="Profile photo URL"
+                  aria-label="Profile photo URL"
+                />
                 <Textarea
                   rows={3}
                   value={p.bio || ''}
                   onChange={e => setP({ ...p, bio: e.target.value })}
                   placeholder="Tell other students about your interests, projects, or what you're building..."
                 />
+                <label className="flex items-center gap-2 text-sm text-muted">
+                  <input
+                    type="checkbox"
+                    checked={p.discoverable ?? true}
+                    onChange={e => setP({ ...p, discoverable: e.target.checked })}
+                    className="accent-primary"
+                  />
+                  Show my profile in Discover
+                </label>
               </div>
             ) : (
               <p className="mt-1.5 text-sm leading-relaxed text-ink/90 sm:text-base">
@@ -328,7 +355,7 @@ export default function Profile() {
                     key={item}
                     className={`rounded-full px-3 py-1 text-xs font-semibold border ${isShared ? 'bg-blush text-primary border-rose/40 shadow-sm' : 'bg-primary-50 text-muted border-line/60'}`}
                   >
-                    {isShared ? `â˜… ${item} (Shared)` : item}
+                    {isShared ? `Gÿà ${item} (Shared)` : item}
                   </span>
                 )
               })
@@ -365,7 +392,7 @@ export default function Profile() {
                     key={item}
                     className={`rounded-full px-3 py-1 text-xs font-semibold border ${youWant ? 'bg-blush text-primary border-rose/40 shadow-sm' : 'bg-primary-50 text-muted border-line/60'}`}
                   >
-                    {youWant ? `â˜… ${item} (Shared Â· You want to learn)` : item}
+                    {youWant ? `Gÿà ${item} (Shared -+ You want to learn)` : item}
                   </span>
                 )
               })
@@ -402,7 +429,7 @@ export default function Profile() {
                     key={item}
                     className={`rounded-full px-3 py-1 text-xs font-semibold border ${youCanTeach ? 'bg-secondary/25 text-ink border-secondary/50 shadow-sm' : 'bg-primary-50 text-muted border-line/60'}`}
                   >
-                    {youCanTeach ? `â˜… ${item} (Shared Â· You can teach)` : item}
+                    {youCanTeach ? `Gÿà ${item} (Shared -+ You can teach)` : item}
                   </span>
                 )
               })
@@ -439,7 +466,7 @@ export default function Profile() {
                     key={item}
                     className={`rounded-full px-3 py-1 text-xs font-semibold capitalize border ${isShared ? 'bg-blush text-primary border-rose/40 shadow-sm' : 'bg-primary-50 text-muted border-line/60'}`}
                   >
-                    {isShared ? `â˜… ${item.replaceAll('_', ' ')} (Shared)` : item.replaceAll('_', ' ')}
+                    {isShared ? `Gÿà ${item.replaceAll('_', ' ')} (Shared)` : item.replaceAll('_', ' ')}
                   </span>
                 )
               })
@@ -484,7 +511,7 @@ export default function Profile() {
                     </span>
                     <div className="min-w-0 flex-1">
                       <h4 className="font-bold text-ink text-sm truncate">{s.name}</h4>
-                      <p className="text-[11px] text-muted">{s.memberCount || s.members?.length || 0} members Â· {s.campus}</p>
+                      <p className="text-[11px] text-muted">{s.memberCount || s.members?.length || 0} members -+ {s.campus} -+ {(s.visibility ?? 'campus') === 'private' ? 'Private' : (s.visibility ?? 'campus') === 'campus' ? 'Campus' : 'Public'}</p>
                     </div>
                   </div>
                   <p className="mt-2 text-xs text-muted line-clamp-2 leading-relaxed">
@@ -517,7 +544,7 @@ export default function Profile() {
                     </span>
                     <div className="min-w-0 flex-1">
                       <h4 className="font-bold text-ink text-sm truncate">{s.name}</h4>
-                      <p className="text-[11px] text-muted">{s.memberCount || s.members?.length || 0} members Â· {s.campus}</p>
+                      <p className="text-[11px] text-muted">{s.memberCount || s.members?.length || 0} members -+ {s.campus} -+ {(s.visibility ?? 'campus') === 'private' ? 'Private' : (s.visibility ?? 'campus') === 'campus' ? 'Campus' : 'Public'}</p>
                     </div>
                   </div>
                   <p className="mt-2 text-xs text-muted line-clamp-2 leading-relaxed">
