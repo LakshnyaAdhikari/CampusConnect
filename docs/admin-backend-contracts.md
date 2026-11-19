@@ -6,7 +6,7 @@ All functions return promises and reject with validation errors, `auth/*` errors
 
 ## Overview
 
-### `getDashboardStats(filters = {}, expectedUid)`
+### `getDashboardStats(filters = {}, expectedUid, onMetricSettled)`
 
 `filters.campus` optionally scopes discoverable student count to an exact campus. Space counts are limited to public Spaces and campus Spaces matching the administrator's own `/users/{uid}.campus`. Reports are counted by each supported status.
 
@@ -14,15 +14,29 @@ Returns:
 
 ```js
 {
-  discoverableStudents: number,
-  visibleSpaces: number,
-  spaces: { public: number, campus: number, active: null },
-  reports: { pending: number, under_review: number, resolved: number, dismissed: number },
+  discoverableStudents: number | null,
+  visibleSpaces: number | null,
+  spaces: { public: number | null, campus: number | null, active: null },
+  reports: { pending: number | null, under_review: number | null, resolved: number | null, dismissed: number | null },
+  metrics: {
+    discoverableStudents: { status: 'success', value: number, metric: string } | { status: 'error', code: string, message: string, metric: string },
+    publicSpaces: MetricResult,
+    campusSpaces: MetricResult,
+    visibleSpaces: MetricResult,
+    pendingReports: MetricResult,
+    underReviewReports: MetricResult,
+    resolvedReports: MetricResult,
+    dismissedReports: MetricResult
+  },
   unsupported: ['activeSpaces']
 }
 ```
 
-Uses Firestore count aggregation rather than downloading documents. `activeSpaces` is unsupported because the Space schema has no active/inactive field.
+`MetricResult` is `{ status: 'success', value: number, metric: string }`, `{ status: 'error', code: string, message: string, metric: string }`, or `{ status: 'unavailable', reason: string, metric: string }`. Each count is settled independently; the optional `onMetricSettled(metric, result)` callback fires as each individual metric settles. Failed values are `null` in the compatibility fields and carry an error state in `metrics`. The combined visible Spaces total is unavailable if either constituent count failed. `activeSpaces` is unsupported because the Space schema has no active/inactive field.
+
+### `getDashboardMetric(metric, expectedUid)`
+
+Loads one retryable metric without repeating the other Overview aggregations. Supported metric keys are `discoverableStudents`, `publicSpaces`, `campusSpaces`, `pendingReports`, `underReviewReports`, `resolvedReports`, and `dismissedReports`. Returns the numeric count, or an unavailable state for `campusSpaces` when the administrator profile has no campus. Firebase errors reject and are surfaced only on that metric.
 
 ### `getRegistrationTrends(filters = {}, expectedUid)`
 

@@ -4,16 +4,16 @@ import { Button, Card, Input } from '../../../components/ui'
 import { CAMPUSES } from '../../../lib/schema'
 import {
   getCampusStats,
+  getDashboardMetric,
   getDashboardStats,
   getRecentActivity,
   getRegistrationTrends,
 } from '../service'
+import { retryMetricLoader, sumMetricResults, unavailableMetric } from '../overview-metrics'
 import { EmptyPanel, ErrorPanel, Field, LoadingPanel, SectionIntro, toDateInput } from './AdminUI'
 
 export default function OverviewPanel({ expectedUid }) {
-  const [stats, setStats] = useState(null)
-  const [statsBusy, setStatsBusy] = useState(true)
-  const [statsError, setStatsError] = useState('')
+  const [metrics, setMetrics] = useState({})
   const [campusStats, setCampusStats] = useState([])
   const [campusBusy, setCampusBusy] = useState(true)
   const [campusError, setCampusError] = useState('')
@@ -33,18 +33,6 @@ export default function OverviewPanel({ expectedUid }) {
   const [trends, setTrends] = useState([])
   const [trendsBusy, setTrendsBusy] = useState(true)
   const [trendsError, setTrendsError] = useState('')
-
-  const loadStats = async () => {
-    setStatsBusy(true)
-    setStatsError('')
-    try {
-      setStats(await getDashboardStats({}, expectedUid))
-    } catch (error) {
-      setStatsError(error.message || 'Overview statistics could not be loaded.')
-    } finally {
-      setStatsBusy(false)
-    }
-  }
 
   const loadCampusStats = async () => {
     setCampusBusy(true)
@@ -72,34 +60,73 @@ export default function OverviewPanel({ expectedUid }) {
 
   useEffect(() => {
     let active = true
-    const run = async (loader, setter) => {
-      try {
-        const value = await loader()
-        if (active) setter({ value })
-      } catch (error) {
-        if (active) setter({ error: error.message || 'The request could not be completed.' })
-      }
-    }
-    setStatsBusy(true)
+    const supportedMetrics = [
+      'discoverableStudents', 'visibleSpaces', 'publicSpaces', 'campusSpaces',
+      'pendingReports', 'underReviewReports', 'resolvedReports', 'dismissedReports',
+    ]
+    setMetrics(Object.fromEntries(supportedMetrics.map(metric => [metric, { status: 'loading', metric }])))
+    getDashboardStats({}, expectedUid, (metric, result) => {
+      if (!active) return
+      setMetrics(current => {
+        const next = { ...current, [metric]: result }
+        if (next.publicSpaces && next.publicSpaces.status !== 'loading'
+          && next.campusSpaces && next.campusSpaces.status !== 'loading') {
+          next.visibleSpaces = { ...sumMetricResults(next.publicSpaces, next.campusSpaces), metric: 'visibleSpaces' }
+        }
+        return next
+      })
+    }).then(result => {
+      if (active) setMetrics(result.metrics)
+    }).catch(error => {
+      if (!active) return
+      setMetrics(Object.fromEntries(supportedMetrics.map(metric => [metric, {
+        status: 'error', metric, code: error.code || 'unknown',
+        message: error.message || 'Administrator statistics could not be loaded.',
+      }])))
+    })
     setCampusBusy(true)
     setActivityBusy(true)
-    run(() => getDashboardStats({}, expectedUid), result => {
-      setStats(result.value ?? null)
-      setStatsError(result.error || '')
-      setStatsBusy(false)
-    })
-    run(() => getCampusStats({ campuses: CAMPUSES }, expectedUid), result => {
-      setCampusStats(result.value ?? [])
-      setCampusError(result.error || '')
-      setCampusBusy(false)
-    })
-    run(() => getRecentActivity({}, expectedUid), result => {
-      setActivity(result.value ?? null)
-      setActivityError(result.error || '')
-      setActivityBusy(false)
-    })
+    getCampusStats({ campuses: CAMPUSES }, expectedUid).then(value => {
+      if (active) setCampusStats(value)
+    }).catch(error => {
+      if (active) setCampusError(error.message || 'Campus statistics could not be loaded.')
+    }).finally(() => { if (active) setCampusBusy(false) })
+    getRecentActivity({}, expectedUid).then(value => {
+      if (active) setActivity(value)
+    }).catch(error => {
+      if (active) setActivityError(error.message || 'Activity availability could not be checked.')
+    }).finally(() => { if (active) setActivityBusy(false) })
     return () => { active = false }
   }, [expectedUid])
+
+  const retryLoaders = {
+    discoverableStudents: () => getDashboardMetric('discoverableStudents', expectedUid),
+    publicSpaces: () => getDashboardMetric('publicSpaces', expectedUid),
+    campusSpaces: () => getDashboardMetric('campusSpaces', expectedUid),
+    pendingReports: () => getDashboardMetric('pendingReports', expectedUid),
+    underReviewReports: () => getDashboardMetric('underReviewReports', expectedUid),
+    resolvedReports: () => getDashboardMetric('resolvedReports', expectedUid),
+    dismissedReports: () => getDashboardMetric('dismissedReports', expectedUid),
+  }
+
+  const retryOverviewMetric = async metric => {
+    const keys = metric === 'visibleSpaces'
+      ? ['publicSpaces', 'campusSpaces'].filter(key => metrics[key]?.status !== 'success')
+      : [metric]
+    const retryKeys = keys.length ? keys : ['campusSpaces']
+    setMetrics(current => ({
+      ...current,
+      ...Object.fromEntries(retryKeys.map(key => [key, { status: 'loading', metric: key }])),
+      ...(metric === 'visibleSpaces' ? { visibleSpaces: { status: 'loading', metric: 'visibleSpaces' } } : {}),
+    }))
+    const retried = await Promise.all(retryKeys.map(key => retryMetricLoader(retryLoaders, key)))
+    setMetrics(current => {
+      const next = { ...current, ...Object.fromEntries(retried) }
+      next.visibleSpaces = sumMetricResults(next.publicSpaces, next.campusSpaces)
+      next.visibleSpaces.metric = 'visibleSpaces'
+      return next
+    })
+  }
 
   useEffect(() => {
     let active = true
@@ -121,17 +148,16 @@ export default function OverviewPanel({ expectedUid }) {
   }
 
   return <div className="space-y-5">
-    {statsError && <ErrorPanel title="Overview statistics unavailable" message={statsError} onRetry={loadStats} />}
     <section aria-label="Campus overview statistics" className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-      <MetricCard title="Discoverable students" value={statsBusy ? '…' : stats ? stats.discoverableStudents : 'Unavailable'} detail="Discoverable public profiles" Icon={Users} />
-      <MetricCard title="Visible Spaces" value={statsBusy ? '…' : stats ? stats.visibleSpaces : 'Unavailable'} detail="Public and matching-campus" Icon={Sparkles} />
-      <MetricCard title="Public Spaces" value={statsBusy ? '…' : stats ? stats.spaces.public : 'Unavailable'} detail="Visible across campuses" Icon={Sparkles} />
-      <MetricCard title="Campus Spaces" value={statsBusy ? '…' : stats ? stats.spaces.campus : 'Unavailable'} detail="Matching the admin campus" Icon={Sparkles} />
-      <MetricCard title="Pending reports" value={statsBusy ? '…' : stats ? stats.reports.pending : 'Unavailable'} detail="Awaiting review" Icon={ShieldCheck} />
-      <MetricCard title="Under review" value={statsBusy ? '…' : stats ? stats.reports.under_review : 'Unavailable'} detail="Currently being reviewed" Icon={ShieldCheck} />
-      <MetricCard title="Resolved reports" value={statsBusy ? '…' : stats ? stats.reports.resolved : 'Unavailable'} detail="Marked resolved" Icon={ShieldCheck} />
-      <MetricCard title="Dismissed reports" value={statsBusy ? '…' : stats ? stats.reports.dismissed : 'Unavailable'} detail="Dismissed by moderators" Icon={ShieldCheck} />
-      <MetricCard title="Active Spaces" value="Unavailable" detail="The Space schema has no active-state field" Icon={BarChart3} />
+      <MetricCard title="Discoverable students" state={metrics.discoverableStudents} detail="Discoverable public profiles" Icon={Users} onRetry={() => retryOverviewMetric('discoverableStudents')} />
+      <MetricCard title="Visible Spaces" state={metrics.visibleSpaces} detail="Public and matching-campus" Icon={Sparkles} onRetry={() => retryOverviewMetric('visibleSpaces')} />
+      <MetricCard title="Public Spaces" state={metrics.publicSpaces} detail="Visible across campuses" Icon={Sparkles} onRetry={() => retryOverviewMetric('publicSpaces')} />
+      <MetricCard title="Campus Spaces" state={metrics.campusSpaces} detail="Matching the admin campus" Icon={Sparkles} onRetry={() => retryOverviewMetric('campusSpaces')} />
+      <MetricCard title="Pending reports" state={metrics.pendingReports} detail="Awaiting review" Icon={ShieldCheck} onRetry={() => retryOverviewMetric('pendingReports')} />
+      <MetricCard title="Under review" state={metrics.underReviewReports} detail="Currently being reviewed" Icon={ShieldCheck} onRetry={() => retryOverviewMetric('underReviewReports')} />
+      <MetricCard title="Resolved reports" state={metrics.resolvedReports} detail="Marked resolved" Icon={ShieldCheck} onRetry={() => retryOverviewMetric('resolvedReports')} />
+      <MetricCard title="Dismissed reports" state={metrics.dismissedReports} detail="Dismissed by moderators" Icon={ShieldCheck} onRetry={() => retryOverviewMetric('dismissedReports')} />
+      <MetricCard title="Active Spaces" state={unavailableMetric('The Space schema has no active-state field.')} detail="Not tracked by current schema" Icon={BarChart3} />
     </section>
 
     <section className="grid gap-5 xl:grid-cols-2">
@@ -179,10 +205,16 @@ export default function OverviewPanel({ expectedUid }) {
   </div>
 }
 
-function MetricCard({ title, value, detail, Icon }) {
+function MetricCard({ title, state = { status: 'loading' }, detail, Icon, onRetry }) {
+  const value = state.status === 'loading' ? '…'
+    : state.status === 'success' ? state.value
+      : 'Unavailable'
   return <Card className="min-w-0">
     <div className="flex items-start justify-between gap-3">
-      <div className="min-w-0"><p className="text-sm text-muted dark:text-[#A1A1B0]">{title}</p><p className={`mt-3 break-words text-3xl font-bold ${value === 'Unavailable' ? 'text-muted dark:text-[#A1A1B0]' : 'text-ink dark:text-[#F4F4F6]'}`}>{value}</p><p className="mt-2 text-xs text-muted dark:text-[#A1A1B0]">{detail}</p></div>
+      <div className="min-w-0"><p className="text-sm text-muted dark:text-[#A1A1B0]">{title}</p><p className={`mt-3 break-words text-3xl font-bold ${state.status === 'success' || state.status === 'loading' ? 'text-ink dark:text-[#F4F4F6]' : 'text-muted dark:text-[#A1A1B0]'}`}>{value}</p><p className="mt-2 text-xs text-muted dark:text-[#A1A1B0]">{detail}</p>
+        {state.status === 'error' && <div className="mt-3 space-y-2"><p role="alert" className="break-words text-xs text-danger">{state.message}</p>{onRetry && <Button type="button" variant="secondary" className="!px-3 !py-1.5 text-xs" onClick={onRetry}>Retry this metric</Button>}</div>}
+        {state.status === 'unavailable' && <p className="mt-2 text-xs text-muted dark:text-[#A1A1B0]">{state.reason}</p>}
+      </div>
       <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-gradient-to-br from-primary-50 to-[#FFEDDA] text-primary dark:bg-[#23232E] dark:text-[#E59858]"><Icon size={19} /></span>
     </div>
   </Card>

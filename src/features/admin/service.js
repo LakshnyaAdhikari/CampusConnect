@@ -1,5 +1,6 @@
 import { auth, db } from '../../lib/firebase'
 import { resolveAuthenticatedUser } from './auth-session'
+import { settleMetricLoaders, sumMetricResults, unavailableMetric } from './overview-metrics'
 import {
   addDoc,
   collection,
@@ -283,44 +284,86 @@ const adminContext = async expectedUid => {
  * Count-only dashboard summary. It reads Firestore aggregate counts instead of
  * downloading the student, Space, or report collections.
  */
-export const getDashboardStats = async (filters = {}, expectedUid) => {
-  await adminContext(expectedUid)
-  const campus = await getAdminCampus('Overview administrator campus profile')
+export const getDashboardStats = async (filters = {}, expectedUid, onMetricSettled) => {
+  const current = await adminContext(expectedUid)
+  const campusPromise = getAdminCampus('Overview administrator campus profile', current.uid)
   const studentConstraints = [where('discoverable', '==', true)]
   if (filters.campus) studentConstraints.push(where('campus', '==', String(filters.campus)))
   const publicSpaceConstraints = [where('visibility', '==', 'public')]
-  const campusSpaceConstraints = campus
-    ? [where('visibility', '==', 'campus'), where('campus', '==', campus)]
-    : null
-  const reportCounts = Object.fromEntries(REPORT_STATUSES.map(status => [
-    status,
-    countQuery('reports', [where('status', '==', status)], {
-      pending: 'Overview pending reports count',
-      under_review: 'Overview under-review reports count',
-      resolved: 'Overview resolved reports count',
-      dismissed: 'Overview dismissed reports count',
-    }[status]),
-  ]))
-  const [students, publicSpaces, campusSpaces, reports] = await Promise.all([
-    countQuery('publicProfiles', studentConstraints, 'Overview discoverable students count'),
-    countQuery('spaces', publicSpaceConstraints, 'Overview public Spaces count'),
-    campusSpaceConstraints
-      ? countQuery('spaces', campusSpaceConstraints, 'Overview campus Spaces count')
-      : Promise.resolve(0),
-    Promise.all(Object.values(reportCounts)),
-  ])
+  const reportMetricStatus = {
+    pendingReports: 'pending',
+    underReviewReports: 'under_review',
+    resolvedReports: 'resolved',
+    dismissedReports: 'dismissed',
+  }
+  const reportOperation = {
+    pending: 'Overview pending reports count',
+    under_review: 'Overview under-review reports count',
+    resolved: 'Overview resolved reports count',
+    dismissed: 'Overview dismissed reports count',
+  }
+  const metrics = await settleMetricLoaders({
+    discoverableStudents: () => countQuery('publicProfiles', studentConstraints, 'Overview discoverable students count'),
+    publicSpaces: () => countQuery('spaces', publicSpaceConstraints, 'Overview public Spaces count'),
+    campusSpaces: async () => {
+      const campus = await campusPromise
+      if (!campus) return unavailableMetric('Campus Spaces cannot be counted because this administrator has no campus on their profile.')
+      return countQuery('spaces', [
+        where('visibility', '==', 'campus'),
+        where('campus', '==', campus),
+      ], 'Overview campus Spaces count')
+    },
+    ...Object.fromEntries(Object.entries(reportMetricStatus).map(([metric, status]) => [
+      metric,
+      () => countQuery('reports', [where('status', '==', status)], reportOperation[status]),
+    ])),
+  }, onMetricSettled)
+  metrics.visibleSpaces = {
+    ...sumMetricResults(metrics.publicSpaces, metrics.campusSpaces),
+    metric: 'visibleSpaces',
+  }
+  const metricValue = metric => metric.status === 'success' ? metric.value : null
   return {
-    discoverableStudents: students,
-    visibleSpaces: publicSpaces + campusSpaces,
-    spaces: { public: publicSpaces, campus: campusSpaces, active: null },
-    reports: Object.fromEntries(REPORT_STATUSES.map((status, index) => [status, reports[index]])),
+    discoverableStudents: metricValue(metrics.discoverableStudents),
+    visibleSpaces: metricValue(metrics.visibleSpaces),
+    spaces: {
+      public: metricValue(metrics.publicSpaces),
+      campus: metricValue(metrics.campusSpaces),
+      active: null,
+    },
+    reports: Object.fromEntries(Object.entries(reportMetricStatus).map(([metric, status]) => [
+      status,
+      metricValue(metrics[metric]),
+    ])),
+    metrics,
     unsupported: ['activeSpaces'],
   }
 }
 
-const getAdminCampus = async diagnosticOperation => {
-  const current = await requireCurrentUser()
-  const read = () => getDoc(doc(ensureDb(), 'users', current.uid))
+export const getDashboardMetric = async (metric, expectedUid) => {
+  const current = await adminContext(expectedUid)
+  const campusCount = async () => {
+    const campus = await getAdminCampus('Overview administrator campus profile', current.uid)
+    if (!campus) return unavailableMetric('Campus Spaces cannot be counted because this administrator has no campus on their profile.')
+    return countQuery('spaces', [where('visibility', '==', 'campus'), where('campus', '==', campus)], 'Overview campus Spaces count')
+  }
+  const metricReaders = {
+    discoverableStudents: () => countQuery('publicProfiles', [where('discoverable', '==', true)], 'Overview discoverable students count'),
+    publicSpaces: () => countQuery('spaces', [where('visibility', '==', 'public')], 'Overview public Spaces count'),
+    campusSpaces: campusCount,
+    pendingReports: () => countQuery('reports', [where('status', '==', 'pending')], 'Overview pending reports count'),
+    underReviewReports: () => countQuery('reports', [where('status', '==', 'under_review')], 'Overview under-review reports count'),
+    resolvedReports: () => countQuery('reports', [where('status', '==', 'resolved')], 'Overview resolved reports count'),
+    dismissedReports: () => countQuery('reports', [where('status', '==', 'dismissed')], 'Overview dismissed reports count'),
+  }
+  const reader = metricReaders[metric]
+  if (!reader) throw new Error(`Overview metric cannot be retried: ${metric}`)
+  return reader()
+}
+
+const getAdminCampus = async (diagnosticOperation, authenticatedUid) => {
+  const uid = authenticatedUid || (await requireCurrentUser()).uid
+  const read = () => getDoc(doc(ensureDb(), 'users', uid))
   const profile = diagnosticOperation
     ? await withAdminReadDiagnostic(diagnosticOperation, read)
     : await read()
