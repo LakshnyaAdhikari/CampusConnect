@@ -11,6 +11,7 @@ import {
   deleteField,
   deleteDoc,
   doc,
+  getCountFromServer,
   getDoc,
   getDocs,
   query,
@@ -55,6 +56,7 @@ function profile(uid, campus = 'North Campus', role = 'student') {
 function space({
   campus = 'North Campus',
   visibility = 'public',
+  isActive = true,
   members = ['alice', 'bob'],
   memberCount = members.length,
   createdBy = 'alice',
@@ -65,6 +67,7 @@ function space({
     category: 'Technology',
     campus,
     visibility,
+    isActive,
     createdBy,
     members,
     memberCount,
@@ -94,7 +97,7 @@ function comment(overrides = {}) {
   }
 }
 
-async function seed({ members = ['alice', 'bob'], withPost = true, campus = 'North Campus', visibility = 'public', legacy = false } = {}) {
+async function seed({ members = ['alice', 'bob'], withPost = true, campus = 'North Campus', visibility = 'public', isActive = true, legacy = false } = {}) {
   await testEnv.withSecurityRulesDisabled(async (context) => {
     const db = context.firestore()
     const profiles = [
@@ -109,7 +112,7 @@ async function seed({ members = ['alice', 'bob'], withPost = true, campus = 'Nor
     for (const item of profiles) {
       await setDoc(doc(db, `users/${item.uid}`), item)
     }
-    const spaceData = space({ members, campus, visibility })
+    const spaceData = space({ members, campus, visibility, isActive })
     if (legacy) delete spaceData.visibility
     await setDoc(doc(db, SPACE_PATH), spaceData)
     if (withPost) {
@@ -392,7 +395,99 @@ test('space creation succeeds for the caller’s protected campus', async () => 
   assert.equal(createdSpace.data().visibility, 'public')
   assert.deepEqual(createdSpace.data().members, ['carol'])
   assert.equal(createdSpace.data().memberCount, 1)
+  assert.equal(createdSpace.data().isActive, true)
   assert.equal(membership.data().spaceId, 'new-space')
+})
+
+test('only a trusted administrator can activate or deactivate a Space', async () => {
+  await seed({ members: ['alice'], withPost: false, isActive: true })
+  const adminDb = dbFor('admin', { campusRole: 'admin' })
+  const ref = doc(adminDb, SPACE_PATH)
+  await assertSucceeds(updateDoc(ref, { isActive: false }))
+  assert.equal((await getDoc(ref)).data().isActive, false)
+  await assertSucceeds(updateDoc(ref, { isActive: true }))
+  assert.equal((await getDoc(ref)).data().isActive, true)
+})
+
+test('students, legacy moderators, and admin mixed-field updates cannot change Space status', async () => {
+  await seed({ members: ['alice'], withPost: false })
+  await assertFails(updateDoc(doc(dbFor('alice'), SPACE_PATH), { isActive: false }))
+  await assertFails(updateDoc(doc(dbFor('moderator'), SPACE_PATH), { isActive: false }))
+  await assertFails(updateDoc(doc(dbFor('admin', { campusRole: 'admin' }), SPACE_PATH), {
+    isActive: false,
+    members: ['alice', 'carol'],
+    memberCount: 2,
+  }))
+})
+
+test('active Space count queries remain scoped to public and administrator-campus Spaces', async () => {
+  await seed({ withPost: false })
+  await testEnv.withSecurityRulesDisabled(async context => {
+    const adminDb = context.firestore()
+    await setDoc(doc(adminDb, 'spaces/public-inactive'), space({ visibility: 'public', isActive: false }))
+    await setDoc(doc(adminDb, 'spaces/campus-active'), space({ visibility: 'campus', isActive: true }))
+    await setDoc(doc(adminDb, 'spaces/campus-other'), space({ visibility: 'campus', campus: 'South Campus', isActive: true }))
+    await setDoc(doc(adminDb, 'spaces/private-active'), space({ visibility: 'private', isActive: true }))
+  })
+
+  const adminDb = dbFor('admin', { campusRole: 'admin' })
+  const publicCount = await assertSucceeds(getCountFromServer(query(
+    collection(adminDb, 'spaces'),
+    where('visibility', '==', 'public'),
+    where('isActive', '==', true),
+  )))
+  const campusCount = await assertSucceeds(getCountFromServer(query(
+    collection(adminDb, 'spaces'),
+    where('visibility', '==', 'campus'),
+    where('campus', '==', 'North Campus'),
+    where('isActive', '==', true),
+  )))
+  assert.equal(publicCount.data().count, 1)
+  assert.equal(campusCount.data().count, 1)
+})
+
+test('student discovery returns only active public and matching-campus Spaces', async () => {
+  await seed({ members: ['alice'], withPost: false, isActive: true })
+  await testEnv.withSecurityRulesDisabled(async context => {
+    const adminDb = context.firestore()
+    await setDoc(doc(adminDb, 'spaces/public-inactive'), space({ visibility: 'public', isActive: false }))
+    await setDoc(doc(adminDb, 'spaces/campus-active'), space({ visibility: 'campus', isActive: true }))
+    await setDoc(doc(adminDb, 'spaces/campus-inactive'), space({ visibility: 'campus', isActive: false }))
+  })
+
+  const studentDb = dbFor('carol')
+  const publicSpaces = await assertSucceeds(getDocs(query(
+    collection(studentDb, 'spaces'),
+    where('visibility', '==', 'public'),
+    where('isActive', '==', true),
+  )))
+  const campusSpaces = await assertSucceeds(getDocs(query(
+    collection(studentDb, 'spaces'),
+    where('visibility', '==', 'campus'),
+    where('campus', '==', 'North Campus'),
+    where('isActive', '==', true),
+  )))
+  assert.deepEqual(publicSpaces.docs.map(item => item.id), [SPACE_ID])
+  assert.deepEqual(campusSpaces.docs.map(item => item.id), ['campus-active'])
+})
+
+test('inactive status does not alter existing Space visibility or membership behavior', async () => {
+  await seed({ members: ['alice'], isActive: false })
+  const aliceDb = dbFor('alice')
+  assert.equal((await assertSucceeds(getDocs(query(
+    collection(aliceDb, 'spaces'),
+    where('visibility', '==', 'public'),
+    where('isActive', '==', true),
+  )))).size, 0)
+  assert.equal((await assertSucceeds(getDoc(doc(aliceDb, SPACE_PATH)))).data().isActive, false)
+  assert.equal((await assertSucceeds(getDoc(doc(aliceDb, `${SPACE_PATH}/posts/${POST_ID}`)))).exists(), true)
+
+  const bobDb = dbFor('bob')
+  const join = writeBatch(bobDb)
+  join.update(doc(bobDb, SPACE_PATH), { members: ['alice', 'bob'], memberCount: 2 })
+  join.set(doc(bobDb, 'users/bob/spaceMemberships/north-space'), { spaceId: SPACE_ID, joinedAt: now() })
+  await assertSucceeds(join.commit())
+  assert.equal((await getDoc(doc(bobDb, SPACE_PATH))).data().isActive, false)
 })
 
 test('private Space creation includes its initial membership index atomically', async () => {

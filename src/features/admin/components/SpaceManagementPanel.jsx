@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
-import { Eye, LockKeyhole, Sparkles } from 'lucide-react'
+import { Eye, LockKeyhole, Power, Sparkles } from 'lucide-react'
 import { Button, Card, Modal, Select } from '../../../components/ui'
-import { getSpaceDetails, getSpaceStats, listSpaces } from '../service'
+import { getSpaceDetails, getSpaceStats, listSpaces, updateSpaceActiveStatus } from '../service'
 import { EmptyPanel, ErrorPanel, Field, LoadingPanel, Pagination, SectionIntro, formatAdminDate } from './AdminUI'
 
 const CATEGORIES = ['Tech & Coding', 'Design & Creative', 'Study & Exams', 'Campus Life']
@@ -19,6 +19,8 @@ export default function SpaceManagementPanel({ expectedUid, campus: adminCampus 
   const [stats, setStats] = useState(null)
   const [detailsBusy, setDetailsBusy] = useState(false)
   const [detailsError, setDetailsError] = useState('')
+  const [statusBusy, setStatusBusy] = useState(false)
+  const [statusError, setStatusError] = useState('')
 
   const changeFilter = (key, value) => {
     setFilters(current => ({ ...current, [key]: value }))
@@ -74,6 +76,26 @@ export default function SpaceManagementPanel({ expectedUid, campus: adminCampus 
     setPage(value => value + 1)
   }
 
+  const changeSpaceStatus = async () => {
+    if (!space || statusBusy) return
+    const nextIsActive = !space.isActive
+    if (space.isActive && !window.confirm(`Deactivate “${space.name || 'this Space'}”? Its membership and content will remain unchanged.`)) return
+
+    setStatusBusy(true)
+    setStatusError('')
+    try {
+      const refreshedSpace = await updateSpaceActiveStatus(space.id, nextIsActive, expectedUid)
+      setSpace(refreshedSpace)
+      setSpaces(current => current.map(item => item.id === refreshedSpace.id
+        ? { ...item, isActive: refreshedSpace.isActive }
+        : item))
+    } catch (reason) {
+      setStatusError(reason.message || 'Space status could not be updated.')
+    } finally {
+      setStatusBusy(false)
+    }
+  }
+
   return <div className="space-y-5">
     <Card>
       <SectionIntro title="Visible Spaces" description="Read-only directory of public Spaces and matching-campus Spaces. Private Spaces are not listed." action={<span className="inline-flex items-center gap-1.5 text-xs font-semibold text-berry"><LockKeyhole size={14} /> Read only</span>} />
@@ -95,6 +117,7 @@ export default function SpaceManagementPanel({ expectedUid, campus: adminCampus 
               <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-primary text-white"><Sparkles size={20} /></span>
               <div className="min-w-0 flex-1"><p className="truncate font-semibold text-ink dark:text-[#F4F4F6]">{item.name || 'Untitled Space'}</p><p className="truncate text-sm text-muted dark:text-[#A1A1B0]">{item.category || 'General'} · {item.campus || 'Campus not set'} · {visibilityLabel(item.visibility)}</p></div>
               <span className="text-xs text-muted dark:text-[#A1A1B0]">{item.memberCount} members</span>
+              <StatusBadge isActive={item.isActive} />
               <Button variant="secondary" className="inline-flex items-center gap-2" onClick={() => setSelectedId(item.id)}><Eye size={15} /> Details</Button>
             </li>)}
           </ul>
@@ -107,6 +130,11 @@ export default function SpaceManagementPanel({ expectedUid, campus: adminCampus 
         : detailsError ? <p role="alert" className="text-sm text-danger">{detailsError}</p>
           : space ? <div className="space-y-4">
             <div><h3 className="text-xl font-bold text-ink dark:text-[#F4F4F6]">{space.name || 'Untitled Space'}</h3><p className="mt-1 text-sm text-muted dark:text-[#A1A1B0]">{space.category} · {space.campus} · {visibilityLabel(space.visibility)}</p></div>
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-line/60 p-3 dark:border-[#2E2E3A]">
+              <div><p className="text-sm font-semibold text-ink dark:text-[#F4F4F6]">Space status</p><p className="mt-1 text-xs text-muted dark:text-[#A1A1B0]">This status does not alter visibility, membership, or existing content.</p></div>
+              <div className="flex items-center gap-2"><StatusBadge isActive={space.isActive} /><Button type="button" variant={space.isActive ? 'secondary' : 'primary'} loading={statusBusy} disabled={statusBusy} className="inline-flex items-center gap-2" onClick={changeSpaceStatus}><Power size={15} />{space.isActive ? 'Deactivate Space' : 'Activate Space'}</Button></div>
+              {statusError && <p role="alert" className="w-full text-sm text-danger">{statusError}</p>}
+            </div>
             <DetailBox label="Description" value={space.description || 'No description provided.'} />
             <div className="grid gap-3 sm:grid-cols-2">
               <DetailBox label="Members" value={stats ? String(stats.memberCount) : 'Unavailable'} />
@@ -125,6 +153,12 @@ export default function SpaceManagementPanel({ expectedUid, campus: adminCampus 
 
 function DetailBox({ label, value }) {
   return <div className="rounded-xl border border-line/60 bg-background p-3 dark:border-[#2E2E3A] dark:bg-[#23232E]"><p className="text-[11px] font-bold uppercase tracking-wide text-muted dark:text-[#A1A1B0]">{label}</p><p className="mt-1 break-words text-sm font-medium text-ink dark:text-[#F4F4F6]">{value}</p></div>
+}
+
+function StatusBadge({ isActive }) {
+  return <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${isActive ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300' : 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300'}`}>
+    {isActive ? 'Active' : 'Inactive'}
+  </span>
 }
 
 function visibilityLabel(visibility) {

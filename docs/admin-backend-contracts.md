@@ -8,7 +8,7 @@ All functions return promises and reject with validation errors, `auth/*` errors
 
 ### `getDashboardStats(filters = {}, expectedUid, onMetricSettled)`
 
-`filters.campus` optionally scopes discoverable student count to an exact campus. Space counts are limited to public Spaces and campus Spaces matching the administrator's own `/users/{uid}.campus`. Reports are counted by each supported status.
+`filters.campus` optionally scopes discoverable student count to an exact campus. Space counts are limited to public Spaces and campus Spaces matching the administrator's own `/users/{uid}.campus`. Active Spaces count only `isActive == true` within those same visible scopes; private and other-campus Spaces are not included. Reports are counted by each supported status.
 
 Returns:
 
@@ -16,27 +16,28 @@ Returns:
 {
   discoverableStudents: number | null,
   visibleSpaces: number | null,
-  spaces: { public: number | null, campus: number | null, active: null },
+  spaces: { public: number | null, campus: number | null, active: number | null },
   reports: { pending: number | null, under_review: number | null, resolved: number | null, dismissed: number | null },
   metrics: {
     discoverableStudents: { status: 'success', value: number, metric: string } | { status: 'error', code: string, message: string, metric: string },
     publicSpaces: MetricResult,
     campusSpaces: MetricResult,
+    activeSpaces: MetricResult,
     visibleSpaces: MetricResult,
     pendingReports: MetricResult,
     underReviewReports: MetricResult,
     resolvedReports: MetricResult,
     dismissedReports: MetricResult
   },
-  unsupported: ['activeSpaces']
+  unsupported: []
 }
 ```
 
-`MetricResult` is `{ status: 'success', value: number, metric: string }`, `{ status: 'error', code: string, message: string, metric: string }`, or `{ status: 'unavailable', reason: string, metric: string }`. Each count is settled independently; the optional `onMetricSettled(metric, result)` callback fires as each individual metric settles. Failed values are `null` in the compatibility fields and carry an error state in `metrics`. The combined visible Spaces total is unavailable if either constituent count failed. `activeSpaces` is unsupported because the Space schema has no active/inactive field.
+`MetricResult` is `{ status: 'success', value: number, metric: string }`, `{ status: 'error', code: string, message: string, metric: string }`, or `{ status: 'unavailable', reason: string, metric: string }`. Each count is settled independently; the optional `onMetricSettled(metric, result)` callback fires as each individual metric settles. Failed values are `null` in the compatibility fields and carry an error state in `metrics`. The combined visible Spaces total is unavailable if either constituent count failed. Read models treat a missing `isActive` field as active until the explicit migration runs.
 
 ### `getDashboardMetric(metric, expectedUid)`
 
-Loads one retryable metric without repeating the other Overview aggregations. Supported metric keys are `discoverableStudents`, `publicSpaces`, `campusSpaces`, `pendingReports`, `underReviewReports`, `resolvedReports`, and `dismissedReports`. Returns the numeric count, or an unavailable state for `campusSpaces` when the administrator profile has no campus. Firebase errors reject and are surfaced only on that metric.
+Loads one retryable metric without repeating the other Overview aggregations. Supported metric keys are `discoverableStudents`, `publicSpaces`, `campusSpaces`, `activeSpaces`, `pendingReports`, `underReviewReports`, `resolvedReports`, and `dismissedReports`. Returns the numeric count, or an unavailable state for `campusSpaces` when the administrator profile has no campus. Firebase errors reject and are surfaced only on that metric.
 
 ### `getRegistrationTrends(filters = {}, expectedUid)`
 
@@ -72,7 +73,7 @@ Returns the discoverable public profile, or `null` when it is missing or not dis
 
 Filters: `category`, `campus`, `visibility: 'all' | 'public' | 'campus'`, `pageSize` (1–100), and `cursor`. Results include public Spaces across campuses and campus-scoped Spaces only for the administrator's own campus. Private Spaces and their contents are excluded. A request for a different campus is rejected.
 
-Returns `{ items: SpaceSummary[], nextCursor }`. Summaries contain name, description, category, campus, visibility, creator UID, member count, and creation time; the `members` array and posts are not returned.
+Returns `{ items: SpaceSummary[], nextCursor }`. Summaries contain name, description, category, campus, visibility, active status, creator UID, member count, and creation time; the `members` array and posts are not returned. A missing legacy `isActive` field is normalized as active.
 
 ### `getSpaceDetails(spaceId, expectedUid)`
 
@@ -81,6 +82,10 @@ Returns a visible public or own-campus Space summary, or `null` for missing, pri
 ### `getSpaceStats(spaceId, expectedUid)`
 
 For a visible Space, returns `{ spaceId, memberCount, postCount, latestPostAt, recentPostCount, activeMembers }`. `postCount` is an aggregate count; `latestPostAt` comes from at most five recent visible posts. `activeMembers` is `null` because the schema has no activity window for member presence. Private Spaces return `null`.
+
+### `updateSpaceActiveStatus(spaceId, isActive, expectedUid)`
+
+Changes only the `isActive` boolean on a visible Space and returns the refreshed Space summary. Firestore Rules require the trusted admin claim and reject updates that combine status changes with other field changes. Existing visibility, membership, and content permissions are unchanged.
 
 ## Reports and moderation
 
@@ -114,6 +119,6 @@ Updates a report and optionally appends a private note in a Firestore batch for 
 
 ## Data and cost limits
 
-No collections or document fields were added. Existing `publicProfiles.createdAt`, `spaces.createdAt`, `spaces.members` / `memberCount`, report status timestamps, and moderation note documents supply the supported data. Count aggregations and paginated directory queries are available for new frontend integrations. The pre-existing `loadAdminDashboard` compatibility function still returns complete student and visible Space arrays for the current dashboard; replace it with count and page calls before using it for a large production directory.
+The feature adds `spaces.isActive: boolean`. New Spaces start active; document reads treat a missing legacy field as active. Student discovery queries require `isActive == true`, so run the migration before deploying this discovery behavior to make legacy Spaces discoverable. The migration at `scripts/migrate-space-active-status.js` defaults to dry-run and only fills missing fields. Preview with `npm run migrate:spaces-active-status -- --project <project-id> --dry-run`; applying requires `--apply --confirm-project <same-project-id>`. Non-emulator writes are restricted to `campusconnect-63b7d`; emulator use remains supported. The migration has not been run automatically. Count aggregations and paginated directory queries are available for new frontend integrations. The pre-existing `loadAdminDashboard` compatibility function still returns complete student and visible Space arrays for the current dashboard; replace it with count and page calls before using it for a large production directory.
 
 No Cloud Functions, service account, Auth user listing, private student profiles, private Space content, or new paid Firebase products are used.

@@ -62,6 +62,8 @@ const normalizeSpace = snapshot => {
     id: snapshot.id,
     members,
     memberCount: members.length,
+    // Legacy Spaces without a status remain active until the migration runs.
+    isActive: data.isActive !== false,
     // Missing visibility retains the pre-visibility campus-only behavior.
     visibility: data.visibility ?? 'campus',
     createdAt: asMillis(data.createdAt),
@@ -101,8 +103,8 @@ export const listSpaces = async campus => {
     return clone(store.spaces
       .filter(item => {
         const visibility = item.visibility ?? 'campus'
-        return visibility === 'public'
-          || ((visibility === 'campus') && item.campus === requestedCampus)
+        return item.isActive !== false && (visibility === 'public'
+          || ((visibility === 'campus') && item.campus === requestedCampus))
       })
       .sort((a, b) => b.createdAt - a.createdAt))
   }
@@ -117,12 +119,17 @@ export const listSpaces = async campus => {
 
   // Public spaces are discoverable across campuses. Campus-scoped legacy spaces
   // are queried separately so private and other-campus spaces cannot be returned.
-  const publicQuery = query(collection(firestore, 'spaces'), where('visibility', '==', 'public'))
+  const publicQuery = query(
+    collection(firestore, 'spaces'),
+    where('visibility', '==', 'public'),
+    where('isActive', '==', true),
+  )
   const campusQuery = requestedCampus
     ? query(
       collection(firestore, 'spaces'),
       where('visibility', '==', 'campus'),
       where('campus', '==', requestedCampus),
+      where('isActive', '==', true),
     )
     : null
   const [publicSnapshot, campusSnapshot] = await Promise.all([
@@ -180,6 +187,7 @@ export const createSpace = async ({ name, description, category, visibility = 'p
     const item = {
       id: id('space'), name, description, category: category || 'Campus Life', campus: profile.campus,
       visibility: selectedVisibility,
+      isActive: true,
       createdBy: store.currentUid, memberCount: 1, createdAt: Date.now(), members: [store.currentUid], posts: [],
     }
     store.spaces.push(item)
@@ -200,6 +208,7 @@ export const createSpace = async ({ name, description, category, visibility = 'p
     category: category || 'Campus Life',
     campus: profile.campus,
     visibility: selectedVisibility,
+    isActive: true,
     createdBy: uid,
     members: [uid],
     memberCount: 1,

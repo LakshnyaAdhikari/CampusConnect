@@ -1,6 +1,25 @@
 {
   "indexes": [
     {
+      "collectionGroup": "spaces",
+      "fields": [
+        { "order": "ASCENDING", "fieldPath": "visibility" },
+        { "order": "ASCENDING", "fieldPath": "isActive" },
+        { "order": "ASCENDING", "fieldPath": "__name__" }
+      ],
+      "queryScope": "COLLECTION"
+    },
+    {
+      "collectionGroup": "spaces",
+      "fields": [
+        { "order": "ASCENDING", "fieldPath": "visibility" },
+        { "order": "ASCENDING", "fieldPath": "campus" },
+        { "order": "ASCENDING", "fieldPath": "isActive" },
+        { "order": "ASCENDING", "fieldPath": "__name__" }
+      ],
+      "queryScope": "COLLECTION"
+    },
+    {
       "collectionGroup": "publicProfiles",
       "fields": [
         {

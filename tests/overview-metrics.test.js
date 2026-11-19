@@ -68,3 +68,12 @@ test('unsupported schema metrics use an explicit unavailable state', () => {
     status: 'unavailable', reason: 'No active-state field exists.',
   })
 })
+
+test('a failed Active Spaces count is an error and never becomes zero', async () => {
+  const result = await settleMetricLoaders({
+    activeSpaces: async () => { throw Object.assign(new Error('Missing or insufficient permissions.'), { code: 'permission-denied' }) },
+  })
+  assert.equal(result.activeSpaces.status, 'error')
+  assert.equal(result.activeSpaces.code, 'permission-denied')
+  assert.equal('value' in result.activeSpaces, false)
+})

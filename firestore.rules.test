@@ -851,6 +851,12 @@ service cloud.firestore {
         return isSpaceStaff();
       }
 
+      function isAdminStatusUpdate() {
+        return isAdmin()
+          && request.resource.data.isActive is bool
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['isActive']);
+      }
+
       function isSameCampus() {
         return signedIn()
           && exists(userPath())
@@ -1008,11 +1014,11 @@ service cloud.firestore {
         && exists(userPath())
         && request.resource.data.keys().hasOnly([
           'name', 'description', 'category', 'campus', 'visibility', 'createdBy',
-          'members', 'memberCount', 'createdAt'
+          'members', 'memberCount', 'createdAt', 'isActive'
         ])
         && request.resource.data.keys().hasAll([
           'name', 'description', 'category', 'campus', 'visibility', 'createdBy',
-          'members', 'memberCount', 'createdAt'
+          'members', 'memberCount', 'createdAt', 'isActive'
         ])
         && request.resource.data.name is string
         && request.resource.data.name.size() > 0
@@ -1028,30 +1034,32 @@ service cloud.firestore {
         && request.resource.data.members == [request.auth.uid]
         && request.resource.data.memberCount == 1
         && request.resource.data.createdAt is timestamp
+        && request.resource.data.isActive == true
         && existsAfter(memberIndexPath(request.auth.uid))
         && getAfter(memberIndexPath(request.auth.uid)).data.spaceId == spaceId;
 
       // The members array is the membership source of truth. Set sizes prevent
       // duplicate UIDs; updates add/remove the caller or repair duplicates without
       // changing the set of actual members.
-      allow update: if signedIn()
-        && (isPublicSpace()
-          || (isCampusScopedSpace() && isSameCampus())
-          || request.auth.uid in resource.data.members
-          || resource.data.createdBy == request.auth.uid
-          || isStaff())
-        && resource.data.members is list
-        && request.resource.data.members is list
-        && isUniqueList(request.resource.data.members)
-        && request.resource.data.memberCount == request.resource.data.members.size()
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['members', 'memberCount', 'membershipApproval'])
-        && !('membershipApproval' in request.resource.data)
-        && (
-          isApprovedPrivateJoin()
-          || isJoin()
-          || isLeave()
-          || isMembershipRepair()
-        );
+      allow update: if isAdminStatusUpdate()
+        || (signedIn()
+          && (isPublicSpace()
+            || (isCampusScopedSpace() && isSameCampus())
+            || request.auth.uid in resource.data.members
+            || resource.data.createdBy == request.auth.uid
+            || isStaff())
+          && resource.data.members is list
+          && request.resource.data.members is list
+          && isUniqueList(request.resource.data.members)
+          && request.resource.data.memberCount == request.resource.data.members.size()
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['members', 'memberCount', 'membershipApproval'])
+          && !('membershipApproval' in request.resource.data)
+          && (
+            isApprovedPrivateJoin()
+            || isJoin()
+            || isLeave()
+            || isMembershipRepair()
+          ));
 
       allow delete: if false;
 

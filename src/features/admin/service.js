@@ -79,6 +79,7 @@ const normalizeSpaceSummary = snapshot => {
     category: data.category || '',
     campus: data.campus || '',
     visibility: data.visibility ?? 'campus',
+    isActive: data.isActive !== false,
     createdBy: data.createdBy || '',
     memberCount: Number.isFinite(data.memberCount) ? data.memberCount : members.length,
     createdAt: fromMillis(data.createdAt),
@@ -302,6 +303,22 @@ export const getDashboardStats = async (filters = {}, expectedUid, onMetricSettl
     resolved: 'Overview resolved reports count',
     dismissed: 'Overview dismissed reports count',
   }
+  const activeSpacesCount = async () => {
+    const campus = await campusPromise
+    const publicCount = countQuery('spaces', [
+      where('visibility', '==', 'public'),
+      where('isActive', '==', true),
+    ], 'Overview active public Spaces count')
+    const campusCount = campus
+      ? countQuery('spaces', [
+        where('visibility', '==', 'campus'),
+        where('campus', '==', campus),
+        where('isActive', '==', true),
+      ], 'Overview active campus Spaces count')
+      : Promise.resolve(0)
+    const [publicSpaces, campusSpaces] = await Promise.all([publicCount, campusCount])
+    return publicSpaces + campusSpaces
+  }
   const metrics = await settleMetricLoaders({
     discoverableStudents: () => countQuery('publicProfiles', studentConstraints, 'Overview discoverable students count'),
     publicSpaces: () => countQuery('spaces', publicSpaceConstraints, 'Overview public Spaces count'),
@@ -313,6 +330,7 @@ export const getDashboardStats = async (filters = {}, expectedUid, onMetricSettl
         where('campus', '==', campus),
       ], 'Overview campus Spaces count')
     },
+    activeSpaces: activeSpacesCount,
     ...Object.fromEntries(Object.entries(reportMetricStatus).map(([metric, status]) => [
       metric,
       () => countQuery('reports', [where('status', '==', status)], reportOperation[status]),
@@ -329,14 +347,14 @@ export const getDashboardStats = async (filters = {}, expectedUid, onMetricSettl
     spaces: {
       public: metricValue(metrics.publicSpaces),
       campus: metricValue(metrics.campusSpaces),
-      active: null,
+      active: metricValue(metrics.activeSpaces),
     },
     reports: Object.fromEntries(Object.entries(reportMetricStatus).map(([metric, status]) => [
       status,
       metricValue(metrics[metric]),
     ])),
     metrics,
-    unsupported: ['activeSpaces'],
+    unsupported: [],
   }
 }
 
@@ -347,10 +365,27 @@ export const getDashboardMetric = async (metric, expectedUid) => {
     if (!campus) return unavailableMetric('Campus Spaces cannot be counted because this administrator has no campus on their profile.')
     return countQuery('spaces', [where('visibility', '==', 'campus'), where('campus', '==', campus)], 'Overview campus Spaces count')
   }
+  const activeSpacesCount = async () => {
+    const campus = await getAdminCampus('Overview administrator campus profile', current.uid)
+    const publicCount = countQuery('spaces', [
+      where('visibility', '==', 'public'),
+      where('isActive', '==', true),
+    ], 'Overview active public Spaces count')
+    const campusCount = campus
+      ? countQuery('spaces', [
+        where('visibility', '==', 'campus'),
+        where('campus', '==', campus),
+        where('isActive', '==', true),
+      ], 'Overview active campus Spaces count')
+      : Promise.resolve(0)
+    const [publicSpaces, campusSpaces] = await Promise.all([publicCount, campusCount])
+    return publicSpaces + campusSpaces
+  }
   const metricReaders = {
     discoverableStudents: () => countQuery('publicProfiles', [where('discoverable', '==', true)], 'Overview discoverable students count'),
     publicSpaces: () => countQuery('spaces', [where('visibility', '==', 'public')], 'Overview public Spaces count'),
     campusSpaces: campusCount,
+    activeSpaces: activeSpacesCount,
     pendingReports: () => countQuery('reports', [where('status', '==', 'pending')], 'Overview pending reports count'),
     underReviewReports: () => countQuery('reports', [where('status', '==', 'under_review')], 'Overview under-review reports count'),
     resolvedReports: () => countQuery('reports', [where('status', '==', 'resolved')], 'Overview resolved reports count'),
@@ -530,6 +565,18 @@ export const getSpaceDetails = async (spaceId, expectedUid) => {
   if (space.visibility === 'private') return null
   if (space.visibility !== 'public' && (!campus || space.campus !== campus)) return null
   return space
+}
+
+export const updateSpaceActiveStatus = async (spaceId, isActive, expectedUid) => {
+  const current = await adminContext(expectedUid)
+  if (typeof spaceId !== 'string' || !spaceId.trim()) throw new Error('A Space ID is required.')
+  if (typeof isActive !== 'boolean') throw new Error('Space active status must be a boolean.')
+  const space = await getSpaceDetails(spaceId.trim(), current.uid)
+  if (!space) throw new Error('This Space is not available for administration.')
+  await updateDoc(doc(ensureDb(), 'spaces', space.id), { isActive })
+  const refreshed = await getSpaceDetails(space.id, current.uid)
+  if (!refreshed) throw new Error('Space status was updated, but the Space could not be refreshed.')
+  return refreshed
 }
 
 export const getSpaceStats = async (spaceId, expectedUid) => {

@@ -9,7 +9,7 @@ import {
   getRecentActivity,
   getRegistrationTrends,
 } from '../service'
-import { retryMetricLoader, sumMetricResults, unavailableMetric } from '../overview-metrics'
+import { retryMetricLoader, sumMetricResults } from '../overview-metrics'
 import { EmptyPanel, ErrorPanel, Field, LoadingPanel, SectionIntro, toDateInput } from './AdminUI'
 
 export default function OverviewPanel({ expectedUid }) {
@@ -62,7 +62,7 @@ export default function OverviewPanel({ expectedUid }) {
     let active = true
     const supportedMetrics = [
       'discoverableStudents', 'visibleSpaces', 'publicSpaces', 'campusSpaces',
-      'pendingReports', 'underReviewReports', 'resolvedReports', 'dismissedReports',
+      'activeSpaces', 'pendingReports', 'underReviewReports', 'resolvedReports', 'dismissedReports',
     ]
     setMetrics(Object.fromEntries(supportedMetrics.map(metric => [metric, { status: 'loading', metric }])))
     getDashboardStats({}, expectedUid, (metric, result) => {
@@ -103,6 +103,7 @@ export default function OverviewPanel({ expectedUid }) {
     discoverableStudents: () => getDashboardMetric('discoverableStudents', expectedUid),
     publicSpaces: () => getDashboardMetric('publicSpaces', expectedUid),
     campusSpaces: () => getDashboardMetric('campusSpaces', expectedUid),
+    activeSpaces: () => getDashboardMetric('activeSpaces', expectedUid),
     pendingReports: () => getDashboardMetric('pendingReports', expectedUid),
     underReviewReports: () => getDashboardMetric('underReviewReports', expectedUid),
     resolvedReports: () => getDashboardMetric('resolvedReports', expectedUid),
@@ -157,7 +158,7 @@ export default function OverviewPanel({ expectedUid }) {
       <MetricCard title="Under review" state={metrics.underReviewReports} detail="Currently being reviewed" Icon={ShieldCheck} onRetry={() => retryOverviewMetric('underReviewReports')} />
       <MetricCard title="Resolved reports" state={metrics.resolvedReports} detail="Marked resolved" Icon={ShieldCheck} onRetry={() => retryOverviewMetric('resolvedReports')} />
       <MetricCard title="Dismissed reports" state={metrics.dismissedReports} detail="Dismissed by moderators" Icon={ShieldCheck} onRetry={() => retryOverviewMetric('dismissedReports')} />
-      <MetricCard title="Active Spaces" state={unavailableMetric('The Space schema has no active-state field.')} detail="Not tracked by current schema" Icon={BarChart3} />
+      <MetricCard title="Active Spaces" state={metrics.activeSpaces} detail="Active among public and matching-campus Spaces" Icon={BarChart3} onRetry={() => retryOverviewMetric('activeSpaces')} />
     </section>
 
     <section className="grid gap-5 xl:grid-cols-2">
@@ -197,7 +198,7 @@ export default function OverviewPanel({ expectedUid }) {
         <ul className="space-y-3 text-sm">
           <CoverageRow label="Discoverable profiles" value="Public profiles only" />
           <CoverageRow label="Spaces" value="Public and matching-campus Spaces" />
-          <CoverageRow label="Active Space count" value="Unavailable · no active-state field" />
+          <CoverageRow label="Active Spaces" value="isActive true · public and matching-campus" />
           <CoverageRow label="Recent global activity" value="Unavailable · no activity feed" />
         </ul>
       </Card>
