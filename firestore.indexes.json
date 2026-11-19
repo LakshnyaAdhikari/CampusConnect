@@ -847,6 +847,20 @@
       "collectionGroup": "reports",
       "fields": [
         {
+          "order": "DESCENDING",
+          "fieldPath": "createdAt"
+        },
+        {
+          "order": "ASCENDING",
+          "fieldPath": "__name__"
+        }
+      ],
+      "queryScope": "COLLECTION"
+    },
+    {
+      "collectionGroup": "reports",
+      "fields": [
+        {
           "order": "ASCENDING",
           "fieldPath": "category"
         },
