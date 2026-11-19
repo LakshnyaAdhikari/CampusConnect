@@ -8,7 +8,7 @@ All functions return promises and reject with validation errors, `auth/*` errors
 
 ### `getDashboardStats(filters = {}, expectedUid, onMetricSettled)`
 
-`filters.campus` optionally scopes discoverable student count to an exact campus. Space counts are limited to public Spaces and campus Spaces matching the administrator's own `/users/{uid}.campus`. Active Spaces count only `isActive == true` within those same visible scopes; private and other-campus Spaces are not included. Reports are counted by each supported status.
+`filters.campus` optionally scopes discoverable student count to an exact campus. Space counts are limited to public Spaces and campus Spaces matching the administrator's own `/users/{uid}.campus`. Active Spaces include records where `isActive !== false`, so legacy documents with no status field count as active; explicitly inactive, private, and other-campus Spaces are excluded. The Overview counts pending, resolved, and dismissed reports; under-review counts are not part of Overview.
 
 Returns:
 
@@ -17,7 +17,7 @@ Returns:
   discoverableStudents: number | null,
   visibleSpaces: number | null,
   spaces: { public: number | null, campus: number | null, active: number | null },
-  reports: { pending: number | null, under_review: number | null, resolved: number | null, dismissed: number | null },
+  reports: { pending: number | null, resolved: number | null, dismissed: number | null },
   metrics: {
     discoverableStudents: { status: 'success', value: number, metric: string } | { status: 'error', code: string, message: string, metric: string },
     publicSpaces: MetricResult,
@@ -25,7 +25,6 @@ Returns:
     activeSpaces: MetricResult,
     visibleSpaces: MetricResult,
     pendingReports: MetricResult,
-    underReviewReports: MetricResult,
     resolvedReports: MetricResult,
     dismissedReports: MetricResult
   },
@@ -37,7 +36,7 @@ Returns:
 
 ### `getDashboardMetric(metric, expectedUid)`
 
-Loads one retryable metric without repeating the other Overview aggregations. Supported metric keys are `discoverableStudents`, `publicSpaces`, `campusSpaces`, `activeSpaces`, `pendingReports`, `underReviewReports`, `resolvedReports`, and `dismissedReports`. Returns the numeric count, or an unavailable state for `campusSpaces` when the administrator profile has no campus. Firebase errors reject and are surfaced only on that metric.
+Loads one retryable metric without repeating the other Overview queries. Supported metric keys are `discoverableStudents`, `publicSpaces`, `campusSpaces`, `activeSpaces`, `pendingReports`, `resolvedReports`, and `dismissedReports`. Returns the numeric count, or an unavailable state for `campusSpaces` when the administrator profile has no campus. Firebase errors reject and are surfaced only on that metric.
 
 ### `getRegistrationTrends(filters = {}, expectedUid)`
 

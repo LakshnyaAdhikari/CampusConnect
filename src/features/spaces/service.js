@@ -1,6 +1,7 @@
 import { isMock } from '../../lib/config'
 import { store, notify, subscribe, clone, id } from '../../lib/mockData'
 import { auth, db } from '../../lib/firebase'
+import { isSpaceActive } from './status.js'
 import {
   collection,
   deleteField,
@@ -63,7 +64,7 @@ const normalizeSpace = snapshot => {
     members,
     memberCount: members.length,
     // Legacy Spaces without a status remain active until the migration runs.
-    isActive: data.isActive !== false,
+    isActive: isSpaceActive(data),
     // Missing visibility retains the pre-visibility campus-only behavior.
     visibility: data.visibility ?? 'campus',
     createdAt: asMillis(data.createdAt),
@@ -103,7 +104,7 @@ export const listSpaces = async campus => {
     return clone(store.spaces
       .filter(item => {
         const visibility = item.visibility ?? 'campus'
-        return item.isActive !== false && (visibility === 'public'
+        return isSpaceActive(item) && (visibility === 'public'
           || ((visibility === 'campus') && item.campus === requestedCampus))
       })
       .sort((a, b) => b.createdAt - a.createdAt))

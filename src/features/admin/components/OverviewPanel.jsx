@@ -62,7 +62,7 @@ export default function OverviewPanel({ expectedUid }) {
     let active = true
     const supportedMetrics = [
       'discoverableStudents', 'visibleSpaces', 'publicSpaces', 'campusSpaces',
-      'activeSpaces', 'pendingReports', 'underReviewReports', 'resolvedReports', 'dismissedReports',
+      'activeSpaces', 'pendingReports', 'resolvedReports', 'dismissedReports',
     ]
     setMetrics(Object.fromEntries(supportedMetrics.map(metric => [metric, { status: 'loading', metric }])))
     getDashboardStats({}, expectedUid, (metric, result) => {
@@ -105,7 +105,6 @@ export default function OverviewPanel({ expectedUid }) {
     campusSpaces: () => getDashboardMetric('campusSpaces', expectedUid),
     activeSpaces: () => getDashboardMetric('activeSpaces', expectedUid),
     pendingReports: () => getDashboardMetric('pendingReports', expectedUid),
-    underReviewReports: () => getDashboardMetric('underReviewReports', expectedUid),
     resolvedReports: () => getDashboardMetric('resolvedReports', expectedUid),
     dismissedReports: () => getDashboardMetric('dismissedReports', expectedUid),
   }
@@ -155,7 +154,6 @@ export default function OverviewPanel({ expectedUid }) {
       <MetricCard title="Public Spaces" state={metrics.publicSpaces} detail="Visible across campuses" Icon={Sparkles} onRetry={() => retryOverviewMetric('publicSpaces')} />
       <MetricCard title="Campus Spaces" state={metrics.campusSpaces} detail="Matching the admin campus" Icon={Sparkles} onRetry={() => retryOverviewMetric('campusSpaces')} />
       <MetricCard title="Pending reports" state={metrics.pendingReports} detail="Awaiting review" Icon={ShieldCheck} onRetry={() => retryOverviewMetric('pendingReports')} />
-      <MetricCard title="Under review" state={metrics.underReviewReports} detail="Currently being reviewed" Icon={ShieldCheck} onRetry={() => retryOverviewMetric('underReviewReports')} />
       <MetricCard title="Resolved reports" state={metrics.resolvedReports} detail="Marked resolved" Icon={ShieldCheck} onRetry={() => retryOverviewMetric('resolvedReports')} />
       <MetricCard title="Dismissed reports" state={metrics.dismissedReports} detail="Dismissed by moderators" Icon={ShieldCheck} onRetry={() => retryOverviewMetric('dismissedReports')} />
       <MetricCard title="Active Spaces" state={metrics.activeSpaces} detail="Active among public and matching-campus Spaces" Icon={BarChart3} onRetry={() => retryOverviewMetric('activeSpaces')} />
@@ -198,7 +196,7 @@ export default function OverviewPanel({ expectedUid }) {
         <ul className="space-y-3 text-sm">
           <CoverageRow label="Discoverable profiles" value="Public profiles only" />
           <CoverageRow label="Spaces" value="Public and matching-campus Spaces" />
-          <CoverageRow label="Active Spaces" value="isActive true · public and matching-campus" />
+          <CoverageRow label="Active Spaces" value="isActive !== false · legacy fields count as active" />
           <CoverageRow label="Recent global activity" value="Unavailable · no activity feed" />
         </ul>
       </Card>

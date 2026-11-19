@@ -1,4 +1,6 @@
 import { auth, db } from '../../lib/firebase'
+import { getActiveVisibleSpaceCount } from './space-count.js'
+import { isSpaceActive } from '../spaces/status.js'
 import { resolveAuthenticatedUser } from './auth-session'
 import { settleMetricLoaders, sumMetricResults, unavailableMetric } from './overview-metrics'
 import {
@@ -79,7 +81,7 @@ const normalizeSpaceSummary = snapshot => {
     category: data.category || '',
     campus: data.campus || '',
     visibility: data.visibility ?? 'campus',
-    isActive: data.isActive !== false,
+    isActive: isSpaceActive(data),
     createdBy: data.createdBy || '',
     memberCount: Number.isFinite(data.memberCount) ? data.memberCount : members.length,
     createdAt: fromMillis(data.createdAt),
@@ -282,8 +284,8 @@ const adminContext = async expectedUid => {
 }
 
 /**
- * Count-only dashboard summary. It reads Firestore aggregate counts instead of
- * downloading the student, Space, or report collections.
+ * Dashboard summary. Space status counts read the complete visible Space sets
+ * so missing legacy isActive fields retain their active-by-default semantics.
  */
 export const getDashboardStats = async (filters = {}, expectedUid, onMetricSettled) => {
   const current = await adminContext(expectedUid)
@@ -293,31 +295,19 @@ export const getDashboardStats = async (filters = {}, expectedUid, onMetricSettl
   const publicSpaceConstraints = [where('visibility', '==', 'public')]
   const reportMetricStatus = {
     pendingReports: 'pending',
-    underReviewReports: 'under_review',
     resolvedReports: 'resolved',
     dismissedReports: 'dismissed',
   }
   const reportOperation = {
     pending: 'Overview pending reports count',
-    under_review: 'Overview under-review reports count',
     resolved: 'Overview resolved reports count',
     dismissed: 'Overview dismissed reports count',
   }
   const activeSpacesCount = async () => {
     const campus = await campusPromise
-    const publicCount = countQuery('spaces', [
-      where('visibility', '==', 'public'),
-      where('isActive', '==', true),
-    ], 'Overview active public Spaces count')
-    const campusCount = campus
-      ? countQuery('spaces', [
-        where('visibility', '==', 'campus'),
-        where('campus', '==', campus),
-        where('isActive', '==', true),
-      ], 'Overview active campus Spaces count')
-      : Promise.resolve(0)
-    const [publicSpaces, campusSpaces] = await Promise.all([publicCount, campusCount])
-    return publicSpaces + campusSpaces
+    return withAdminReadDiagnostic('Overview active Spaces count', () => (
+      getActiveVisibleSpaceCount(ensureDb(), campus)
+    ))
   }
   const metrics = await settleMetricLoaders({
     discoverableStudents: () => countQuery('publicProfiles', studentConstraints, 'Overview discoverable students count'),
@@ -367,19 +357,9 @@ export const getDashboardMetric = async (metric, expectedUid) => {
   }
   const activeSpacesCount = async () => {
     const campus = await getAdminCampus('Overview administrator campus profile', current.uid)
-    const publicCount = countQuery('spaces', [
-      where('visibility', '==', 'public'),
-      where('isActive', '==', true),
-    ], 'Overview active public Spaces count')
-    const campusCount = campus
-      ? countQuery('spaces', [
-        where('visibility', '==', 'campus'),
-        where('campus', '==', campus),
-        where('isActive', '==', true),
-      ], 'Overview active campus Spaces count')
-      : Promise.resolve(0)
-    const [publicSpaces, campusSpaces] = await Promise.all([publicCount, campusCount])
-    return publicSpaces + campusSpaces
+    return withAdminReadDiagnostic('Overview active Spaces count', () => (
+      getActiveVisibleSpaceCount(ensureDb(), campus)
+    ))
   }
   const metricReaders = {
     discoverableStudents: () => countQuery('publicProfiles', [where('discoverable', '==', true)], 'Overview discoverable students count'),
@@ -387,7 +367,6 @@ export const getDashboardMetric = async (metric, expectedUid) => {
     campusSpaces: campusCount,
     activeSpaces: activeSpacesCount,
     pendingReports: () => countQuery('reports', [where('status', '==', 'pending')], 'Overview pending reports count'),
-    underReviewReports: () => countQuery('reports', [where('status', '==', 'under_review')], 'Overview under-review reports count'),
     resolvedReports: () => countQuery('reports', [where('status', '==', 'resolved')], 'Overview resolved reports count'),
     dismissedReports: () => countQuery('reports', [where('status', '==', 'dismissed')], 'Overview dismissed reports count'),
   }
