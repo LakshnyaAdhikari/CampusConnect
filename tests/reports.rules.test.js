@@ -11,6 +11,7 @@ import {
   deleteDoc,
   doc,
   getDoc,
+  getCountFromServer,
   getDocs,
   query,
   serverTimestamp,
@@ -175,6 +176,48 @@ test('an administrator with the trusted claim can read all reports', async () =>
   const db = dbFor('trusted-admin', { campusRole: 'admin' })
   const snapshot = await assertSucceeds(getDocs(collection(db, 'reports')))
   assert.equal(snapshot.size, 1)
+})
+
+test('trusted administrators can count Reports by status without granting students broad report access', async () => {
+  await seedReport('own-pending-report', report('student', { status: 'pending' }))
+  await seedReport('other-pending-report', report('other-student', { status: 'pending' }))
+  await seedReport('other-review-report', report('other-student', { status: 'under_review' }))
+
+  const adminDb = dbFor('trusted-admin', { campusRole: 'admin' })
+  const pendingCount = await assertSucceeds(getCountFromServer(query(
+    collection(adminDb, 'reports'),
+    where('status', '==', 'pending'),
+  )))
+  const reviewCount = await assertSucceeds(getCountFromServer(query(
+    collection(adminDb, 'reports'),
+    where('status', '==', 'under_review'),
+  )))
+  assert.equal(pendingCount.data().count, 2)
+  assert.equal(reviewCount.data().count, 1)
+
+  const studentDb = dbFor('student')
+  await assertFails(getCountFromServer(query(
+    collection(studentDb, 'reports'),
+    where('status', '==', 'pending'),
+  )))
+})
+
+test('an administrator can constrain report queries by status, category, and creation date', async () => {
+  await seedReport('matching-report', report('student', {
+    status: 'under_review', category: 'safety', createdAt: now,
+  }))
+  await seedReport('other-status-report', report('student', {
+    status: 'pending', category: 'safety', createdAt: now,
+  }))
+  const db = dbFor('trusted-admin', { campusRole: 'admin' })
+  const filtered = await assertSucceeds(getDocs(query(
+    collection(db, 'reports'),
+    where('status', '==', 'under_review'),
+    where('category', '==', 'safety'),
+    where('createdAt', '>=', now),
+  )))
+  assert.equal(filtered.size, 1)
+  assert.equal(filtered.docs[0].id, 'matching-report')
 })
 
 test('an administrator can update report status and moderation fields', async () => {

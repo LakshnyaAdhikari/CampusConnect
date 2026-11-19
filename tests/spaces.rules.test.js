@@ -34,6 +34,12 @@ function dbFor(uid, claims = {}) {
   return testEnv.authenticatedContext(uid, claims).firestore()
 }
 
+test('an administrator cannot list private Spaces through the admin directory query', async () => {
+  await seed({ visibility: 'private' })
+  const db = dbFor('admin', { campusRole: 'admin' })
+  await assertFails(getDocs(query(collection(db, 'spaces'), where('visibility', '==', 'private'))))
+})
+
 function profile(uid, campus = 'North Campus', role = 'student') {
   return {
     uid,

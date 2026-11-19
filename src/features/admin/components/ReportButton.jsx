@@ -1,9 +1,11 @@
 import { useState } from 'react'
 import { Flag } from 'lucide-react'
 import { Button, Modal, Select, Textarea, useToast } from '../../../components/ui'
+import { useAuth } from '../../../context/AuthContext'
 import { createReport, REPORT_CATEGORIES } from '../service'
 
 export const ReportButton = ({ targetType, targetId, spaceId }) => {
+  const { user, loading } = useAuth()
   const [open, setOpen] = useState(false)
   const [category, setCategory] = useState(REPORT_CATEGORIES[0].value)
   const [reason, setReason] = useState('')
@@ -20,7 +22,7 @@ export const ReportButton = ({ targetType, targetId, spaceId }) => {
         ...(targetType === 'post' ? { spaceId } : {}),
         category,
         reason,
-      })
+      }, user?.uid)
       setOpen(false)
       setReason('')
       toast(result.duplicate ? 'You already have an active report for this item.' : 'Report submitted for review.')
@@ -32,7 +34,7 @@ export const ReportButton = ({ targetType, targetId, spaceId }) => {
   }
 
   return <>
-    <Button type="button" aria-label="Report" variant="ghost" className="p-1" onClick={() => setOpen(true)}>
+    <Button type="button" aria-label="Report" variant="ghost" className="p-1" disabled={loading || !user?.uid} onClick={() => setOpen(true)}>
       <Flag size={16}/>
     </Button>
     <Modal open={open} onClose={() => { if (!busy) setOpen(false) }} title="Report content">

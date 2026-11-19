@@ -1,0 +1,887 @@
+{
+  "indexes": [
+    {
+      "collectionGroup": "publicProfiles",
+      "fields": [
+        {
+          "order": "ASCENDING",
+          "fieldPath": "discoverable"
+        },
+        {
+          "order": "ASCENDING",
+          "fieldPath": "name"
+        },
+        {
+          "order": "ASCENDING",
+          "fieldPath": "__name__"
+        }
+      ],
+      "queryScope": "COLLECTION"
+    },
+    {
+      "collectionGroup": "publicProfiles",
+      "fields": [
+        {
+          "order": "ASCENDING",
+          "fieldPath": "discoverable"
+        },
+        {
+          "arrayConfig": "CONTAINS",
+          "fieldPath": "interests"
+        },
+        {
+          "order": "ASCENDING",
+          "fieldPath": "name"
+        },
+        {
+          "order": "ASCENDING",
+          "fieldPath": "__name__"
+        }
+      ],
+      "queryScope": "COLLECTION"
+    },
+    {
+      "collectionGroup": "publicProfiles",
+      "fields": [
+        {
+          "order": "ASCENDING",
+          "fieldPath": "discoverable"
+        },
+        {
+          "arrayConfig": "CONTAINS",
+          "fieldPath": "teach"
+        },
+        {
+          "order": "ASCENDING",
+          "fieldPath": "name"
+        },
+        {
+          "order": "ASCENDING",
+          "fieldPath": "__name__"
+        }
+      ],
+      "queryScope": "COLLECTION"
+    },
+    {
+      "collectionGroup": "publicProfiles",
+      "fields": [
+        {
+          "order": "ASCENDING",
+          "fieldPath": "discoverable"
+        },
+        {
+          "arrayConfig": "CONTAINS",
+          "fieldPath": "learn"
+        },
+        {
+          "order": "ASCENDING",
+          "fieldPath": "name"
+        },
+        {
+          "order": "ASCENDING",
+          "fieldPath": "__name__"
+        }
+      ],
+      "queryScope": "COLLECTION"
+    },
+    {
+      "collectionGroup": "publicProfiles",
+      "fields": [
+        {
+          "order": "ASCENDING",
+          "fieldPath": "discoverable"
+        },
+        {
+          "order": "ASCENDING",
+          "fieldPath": "campus"
+        },
+        {
+          "order": "ASCENDING",
+          "fieldPath": "name"
+        },
+        {
+          "order": "ASCENDING",
+          "fieldPath": "__name__"
+        }
+      ],
+      "queryScope": "COLLECTION"
+    },
+    {
+      "collectionGroup": "publicProfiles",
+      "fields": [
+        {
+          "order": "ASCENDING",
+          "fieldPath": "discoverable"
+        },
+        {
+          "order": "ASCENDING",
+          "fieldPath": "campus"
+        },
+        {
+          "arrayConfig": "CONTAINS",
+          "fieldPath": "interests"
+        },
+        {
+          "order": "ASCENDING",
+          "fieldPath": "name"
+        },
+        {
+          "order": "ASCENDING",
+          "fieldPath": "__name__"
+        }
+      ],
+      "queryScope": "COLLECTION"
+    },
+    {
+      "collectionGroup": "publicProfiles",
+      "fields": [
+        {
+          "order": "ASCENDING",
+          "fieldPath": "discoverable"
+        },
+        {
+          "order": "ASCENDING",
+          "fieldPath": "campus"
+        },
+        {
+          "arrayConfig": "CONTAINS",
+          "fieldPath": "teach"
+        },
+        {
+          "order": "ASCENDING",
+          "fieldPath": "name"
+        },
+        {
+          "order": "ASCENDING",
+          "fieldPath": "__name__"
+        }
+      ],
+      "queryScope": "COLLECTION"
+    },
+    {
+      "collectionGroup": "publicProfiles",
+      "fields": [
+        {
+          "order": "ASCENDING",
+          "fieldPath": "discoverable"
+        },
+        {
+          "order": "ASCENDING",
+          "fieldPath": "campus"
+        },
+        {
+          "arrayConfig": "CONTAINS",
+          "fieldPath": "learn"
+        },
+        {
+          "order": "ASCENDING",
+          "fieldPath": "name"
+        },
+        {
+          "order": "ASCENDING",
+          "fieldPath": "__name__"
+        }
+      ],
+      "queryScope": "COLLECTION"
+    },
+    {
+      "collectionGroup": "publicProfiles",
+      "fields": [
+        {
+          "order": "ASCENDING",
+          "fieldPath": "discoverable"
+        },
+        {
+          "order": "DESCENDING",
+          "fieldPath": "name"
+        },
+        {
+          "order": "DESCENDING",
+          "fieldPath": "__name__"
+        }
+      ],
+      "queryScope": "COLLECTION"
+    },
+    {
+      "collectionGroup": "publicProfiles",
+      "fields": [
+        {
+          "order": "ASCENDING",
+          "fieldPath": "discoverable"
+        },
+        {
+          "arrayConfig": "CONTAINS",
+          "fieldPath": "interests"
+        },
+        {
+          "order": "DESCENDING",
+          "fieldPath": "name"
+        },
+        {
+          "order": "DESCENDING",
+          "fieldPath": "__name__"
+        }
+      ],
+      "queryScope": "COLLECTION"
+    },
+    {
+      "collectionGroup": "publicProfiles",
+      "fields": [
+        {
+          "order": "ASCENDING",
+          "fieldPath": "discoverable"
+        },
+        {
+          "arrayConfig": "CONTAINS",
+          "fieldPath": "teach"
+        },
+        {
+          "order": "DESCENDING",
+          "fieldPath": "name"
+        },
+        {
+          "order": "DESCENDING",
+          "fieldPath": "__name__"
+        }
+      ],
+      "queryScope": "COLLECTION"
+    },
+    {
+      "collectionGroup": "publicProfiles",
+      "fields": [
+        {
+          "order": "ASCENDING",
+          "fieldPath": "discoverable"
+        },
+        {
+          "arrayConfig": "CONTAINS",
+          "fieldPath": "learn"
+        },
+        {
+          "order": "DESCENDING",
+          "fieldPath": "name"
+        },
+        {
+          "order": "DESCENDING",
+          "fieldPath": "__name__"
+        }
+      ],
+      "queryScope": "COLLECTION"
+    },
+    {
+      "collectionGroup": "publicProfiles",
+      "fields": [
+        {
+          "order": "ASCENDING",
+          "fieldPath": "discoverable"
+        },
+        {
+          "order": "ASCENDING",
+          "fieldPath": "campus"
+        },
+        {
+          "order": "DESCENDING",
+          "fieldPath": "name"
+        },
+        {
+          "order": "DESCENDING",
+          "fieldPath": "__name__"
+        }
+      ],
+      "queryScope": "COLLECTION"
+    },
+    {
+      "collectionGroup": "publicProfiles",
+      "fields": [
+        {
+          "order": "ASCENDING",
+          "fieldPath": "discoverable"
+        },
+        {
+          "order": "ASCENDING",
+          "fieldPath": "campus"
+        },
+        {
+          "arrayConfig": "CONTAINS",
+          "fieldPath": "interests"
+        },
+        {
+          "order": "DESCENDING",
+          "fieldPath": "name"
+        },
+        {
+          "order": "DESCENDING",
+          "fieldPath": "__name__"
+        }
+      ],
+      "queryScope": "COLLECTION"
+    },
+    {
+      "collectionGroup": "publicProfiles",
+      "fields": [
+        {
+          "order": "ASCENDING",
+          "fieldPath": "discoverable"
+        },
+        {
+          "order": "ASCENDING",
+          "fieldPath": "campus"
+        },
+        {
+          "arrayConfig": "CONTAINS",
+          "fieldPath": "teach"
+        },
+        {
+          "order": "DESCENDING",
+          "fieldPath": "name"
+        },
+        {
+          "order": "DESCENDING",
+          "fieldPath": "__name__"
+        }
+      ],
+      "queryScope": "COLLECTION"
+    },
+    {
+      "collectionGroup": "publicProfiles",
+      "fields": [
+        {
+          "order": "ASCENDING",
+          "fieldPath": "discoverable"
+        },
+        {
+          "order": "ASCENDING",
+          "fieldPath": "campus"
+        },
+        {
+          "arrayConfig": "CONTAINS",
+          "fieldPath": "learn"
+        },
+        {
+          "order": "DESCENDING",
+          "fieldPath": "name"
+        },
+        {
+          "order": "DESCENDING",
+          "fieldPath": "__name__"
+        }
+      ],
+      "queryScope": "COLLECTION"
+    },
+    {
+      "collectionGroup": "publicProfiles",
+      "fields": [
+        {
+          "order": "ASCENDING",
+          "fieldPath": "discoverable"
+        },
+        {
+          "order": "ASCENDING",
+          "fieldPath": "createdAt"
+        },
+        {
+          "order": "ASCENDING",
+          "fieldPath": "__name__"
+        }
+      ],
+      "queryScope": "COLLECTION"
+    },
+    {
+      "collectionGroup": "publicProfiles",
+      "fields": [
+        {
+          "order": "ASCENDING",
+          "fieldPath": "discoverable"
+        },
+        {
+          "arrayConfig": "CONTAINS",
+          "fieldPath": "interests"
+        },
+        {
+          "order": "ASCENDING",
+          "fieldPath": "createdAt"
+        },
+        {
+          "order": "ASCENDING",
+          "fieldPath": "__name__"
+        }
+      ],
+      "queryScope": "COLLECTION"
+    },
+    {
+      "collectionGroup": "publicProfiles",
+      "fields": [
+        {
+          "order": "ASCENDING",
+          "fieldPath": "discoverable"
+        },
+        {
+          "arrayConfig": "CONTAINS",
+          "fieldPath": "teach"
+        },
+        {
+          "order": "ASCENDING",
+          "fieldPath": "createdAt"
+        },
+        {
+          "order": "ASCENDING",
+          "fieldPath": "__name__"
+        }
+      ],
+      "queryScope": "COLLECTION"
+    },
+    {
+      "collectionGroup": "publicProfiles",
+      "fields": [
+        {
+          "order": "ASCENDING",
+          "fieldPath": "discoverable"
+        },
+        {
+          "arrayConfig": "CONTAINS",
+          "fieldPath": "learn"
+        },
+        {
+          "order": "ASCENDING",
+          "fieldPath": "createdAt"
+        },
+        {
+          "order": "ASCENDING",
+          "fieldPath": "__name__"
+        }
+      ],
+      "queryScope": "COLLECTION"
+    },
+    {
+      "collectionGroup": "publicProfiles",
+      "fields": [
+        {
+          "order": "ASCENDING",
+          "fieldPath": "discoverable"
+        },
+        {
+          "order": "ASCENDING",
+          "fieldPath": "campus"
+        },
+        {
+          "order": "ASCENDING",
+          "fieldPath": "createdAt"
+        },
+        {
+          "order": "ASCENDING",
+          "fieldPath": "__name__"
+        }
+      ],
+      "queryScope": "COLLECTION"
+    },
+    {
+      "collectionGroup": "publicProfiles",
+      "fields": [
+        {
+          "order": "ASCENDING",
+          "fieldPath": "discoverable"
+        },
+        {
+          "order": "ASCENDING",
+          "fieldPath": "campus"
+        },
+        {
+          "arrayConfig": "CONTAINS",
+          "fieldPath": "interests"
+        },
+        {
+          "order": "ASCENDING",
+          "fieldPath": "createdAt"
+        },
+        {
+          "order": "ASCENDING",
+          "fieldPath": "__name__"
+        }
+      ],
+      "queryScope": "COLLECTION"
+    },
+    {
+      "collectionGroup": "publicProfiles",
+      "fields": [
+        {
+          "order": "ASCENDING",
+          "fieldPath": "discoverable"
+        },
+        {
+          "order": "ASCENDING",
+          "fieldPath": "campus"
+        },
+        {
+          "arrayConfig": "CONTAINS",
+          "fieldPath": "teach"
+        },
+        {
+          "order": "ASCENDING",
+          "fieldPath": "createdAt"
+        },
+        {
+          "order": "ASCENDING",
+          "fieldPath": "__name__"
+        }
+      ],
+      "queryScope": "COLLECTION"
+    },
+    {
+      "collectionGroup": "publicProfiles",
+      "fields": [
+        {
+          "order": "ASCENDING",
+          "fieldPath": "discoverable"
+        },
+        {
+          "order": "ASCENDING",
+          "fieldPath": "campus"
+        },
+        {
+          "arrayConfig": "CONTAINS",
+          "fieldPath": "learn"
+        },
+        {
+          "order": "ASCENDING",
+          "fieldPath": "createdAt"
+        },
+        {
+          "order": "ASCENDING",
+          "fieldPath": "__name__"
+        }
+      ],
+      "queryScope": "COLLECTION"
+    },
+    {
+      "collectionGroup": "publicProfiles",
+      "fields": [
+        {
+          "order": "ASCENDING",
+          "fieldPath": "discoverable"
+        },
+        {
+          "order": "DESCENDING",
+          "fieldPath": "createdAt"
+        },
+        {
+          "order": "DESCENDING",
+          "fieldPath": "__name__"
+        }
+      ],
+      "queryScope": "COLLECTION"
+    },
+    {
+      "collectionGroup": "publicProfiles",
+      "fields": [
+        {
+          "order": "ASCENDING",
+          "fieldPath": "discoverable"
+        },
+        {
+          "arrayConfig": "CONTAINS",
+          "fieldPath": "interests"
+        },
+        {
+          "order": "DESCENDING",
+          "fieldPath": "createdAt"
+        },
+        {
+          "order": "DESCENDING",
+          "fieldPath": "__name__"
+        }
+      ],
+      "queryScope": "COLLECTION"
+    },
+    {
+      "collectionGroup": "publicProfiles",
+      "fields": [
+        {
+          "order": "ASCENDING",
+          "fieldPath": "discoverable"
+        },
+        {
+          "arrayConfig": "CONTAINS",
+          "fieldPath": "teach"
+        },
+        {
+          "order": "DESCENDING",
+          "fieldPath": "createdAt"
+        },
+        {
+          "order": "DESCENDING",
+          "fieldPath": "__name__"
+        }
+      ],
+      "queryScope": "COLLECTION"
+    },
+    {
+      "collectionGroup": "publicProfiles",
+      "fields": [
+        {
+          "order": "ASCENDING",
+          "fieldPath": "discoverable"
+        },
+        {
+          "arrayConfig": "CONTAINS",
+          "fieldPath": "learn"
+        },
+        {
+          "order": "DESCENDING",
+          "fieldPath": "createdAt"
+        },
+        {
+          "order": "DESCENDING",
+          "fieldPath": "__name__"
+        }
+      ],
+      "queryScope": "COLLECTION"
+    },
+    {
+      "collectionGroup": "publicProfiles",
+      "fields": [
+        {
+          "order": "ASCENDING",
+          "fieldPath": "discoverable"
+        },
+        {
+          "order": "ASCENDING",
+          "fieldPath": "campus"
+        },
+        {
+          "order": "DESCENDING",
+          "fieldPath": "createdAt"
+        },
+        {
+          "order": "DESCENDING",
+          "fieldPath": "__name__"
+        }
+      ],
+      "queryScope": "COLLECTION"
+    },
+    {
+      "collectionGroup": "publicProfiles",
+      "fields": [
+        {
+          "order": "ASCENDING",
+          "fieldPath": "discoverable"
+        },
+        {
+          "order": "ASCENDING",
+          "fieldPath": "campus"
+        },
+        {
+          "arrayConfig": "CONTAINS",
+          "fieldPath": "interests"
+        },
+        {
+          "order": "DESCENDING",
+          "fieldPath": "createdAt"
+        },
+        {
+          "order": "DESCENDING",
+          "fieldPath": "__name__"
+        }
+      ],
+      "queryScope": "COLLECTION"
+    },
+    {
+      "collectionGroup": "publicProfiles",
+      "fields": [
+        {
+          "order": "ASCENDING",
+          "fieldPath": "discoverable"
+        },
+        {
+          "order": "ASCENDING",
+          "fieldPath": "campus"
+        },
+        {
+          "arrayConfig": "CONTAINS",
+          "fieldPath": "teach"
+        },
+        {
+          "order": "DESCENDING",
+          "fieldPath": "createdAt"
+        },
+        {
+          "order": "DESCENDING",
+          "fieldPath": "__name__"
+        }
+      ],
+      "queryScope": "COLLECTION"
+    },
+    {
+      "collectionGroup": "publicProfiles",
+      "fields": [
+        {
+          "order": "ASCENDING",
+          "fieldPath": "discoverable"
+        },
+        {
+          "order": "ASCENDING",
+          "fieldPath": "campus"
+        },
+        {
+          "arrayConfig": "CONTAINS",
+          "fieldPath": "learn"
+        },
+        {
+          "order": "DESCENDING",
+          "fieldPath": "createdAt"
+        },
+        {
+          "order": "DESCENDING",
+          "fieldPath": "__name__"
+        }
+      ],
+      "queryScope": "COLLECTION"
+    },
+    {
+      "collectionGroup": "spaces",
+      "fields": [
+        {
+          "order": "ASCENDING",
+          "fieldPath": "visibility"
+        },
+        {
+          "order": "DESCENDING",
+          "fieldPath": "createdAt"
+        },
+        {
+          "order": "ASCENDING",
+          "fieldPath": "__name__"
+        }
+      ],
+      "queryScope": "COLLECTION"
+    },
+    {
+      "collectionGroup": "spaces",
+      "fields": [
+        {
+          "order": "ASCENDING",
+          "fieldPath": "visibility"
+        },
+        {
+          "order": "ASCENDING",
+          "fieldPath": "campus"
+        },
+        {
+          "order": "DESCENDING",
+          "fieldPath": "createdAt"
+        },
+        {
+          "order": "ASCENDING",
+          "fieldPath": "__name__"
+        }
+      ],
+      "queryScope": "COLLECTION"
+    },
+    {
+      "collectionGroup": "spaces",
+      "fields": [
+        {
+          "order": "ASCENDING",
+          "fieldPath": "visibility"
+        },
+        {
+          "order": "ASCENDING",
+          "fieldPath": "category"
+        },
+        {
+          "order": "DESCENDING",
+          "fieldPath": "createdAt"
+        },
+        {
+          "order": "ASCENDING",
+          "fieldPath": "__name__"
+        }
+      ],
+      "queryScope": "COLLECTION"
+    },
+    {
+      "collectionGroup": "spaces",
+      "fields": [
+        {
+          "order": "ASCENDING",
+          "fieldPath": "visibility"
+        },
+        {
+          "order": "ASCENDING",
+          "fieldPath": "campus"
+        },
+        {
+          "order": "ASCENDING",
+          "fieldPath": "category"
+        },
+        {
+          "order": "DESCENDING",
+          "fieldPath": "createdAt"
+        },
+        {
+          "order": "ASCENDING",
+          "fieldPath": "__name__"
+        }
+      ],
+      "queryScope": "COLLECTION"
+    },
+    {
+      "collectionGroup": "reports",
+      "fields": [
+        {
+          "order": "ASCENDING",
+          "fieldPath": "category"
+        },
+        {
+          "order": "DESCENDING",
+          "fieldPath": "createdAt"
+        },
+        {
+          "order": "ASCENDING",
+          "fieldPath": "__name__"
+        }
+      ],
+      "queryScope": "COLLECTION"
+    },
+    {
+      "collectionGroup": "reports",
+      "fields": [
+        {
+          "order": "ASCENDING",
+          "fieldPath": "status"
+        },
+        {
+          "order": "DESCENDING",
+          "fieldPath": "createdAt"
+        },
+        {
+          "order": "ASCENDING",
+          "fieldPath": "__name__"
+        }
+      ],
+      "queryScope": "COLLECTION"
+    },
+    {
+      "collectionGroup": "reports",
+      "fields": [
+        {
+          "order": "ASCENDING",
+          "fieldPath": "status"
+        },
+        {
+          "order": "ASCENDING",
+          "fieldPath": "category"
+        },
+        {
+          "order": "DESCENDING",
+          "fieldPath": "createdAt"
+        },
+        {
+          "order": "ASCENDING",
+          "fieldPath": "__name__"
+        }
+      ],
+      "queryScope": "COLLECTION"
+    }
+  ],
+  "fieldOverrides": []
+}
