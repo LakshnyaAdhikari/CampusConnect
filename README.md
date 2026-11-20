@@ -2,13 +2,21 @@
 
 CampusConnect is a campus connection app built with React 18, Vite, Tailwind, React Router, Firebase SDK, and a complete in-memory mock mode.
 
+## Live app
+
+[Open CampusConnect](https://campus-connect-zeta-one.vercel.app)
+
 ## Setup
 
 Run `npm install`, copy `.env.example` to `.env`, then run `npm run dev`. Build with `npm run build`.
 
 ## Mock and real modes
 
-`VITE_MOCK_SERVICES=all` is the default and allows the whole product to run without Firebase. Set a comma-separated service list to mock selected services. Each service has an isolated mock branch and a placeholder real branch for the backend integration work.
+If `VITE_MOCK_SERVICES` is unset, all services use mock data. Set a comma-separated list to mock only selected services; for example, `VITE_MOCK_SERVICES=spaces,admin` keeps those services mocked while the others use their Firebase branches.
+
+## Discover matching
+
+Discover calculates scores from exact tag matches and sorts profiles from highest to lowest score. The base score is +3 for each complementary skill match, +2 for each shared interest, and +1 for each shared goal. It adds conditional bonuses for reciprocal skill exchange (+5), deeper interest overlap (+1 for two shared interests or +4 for three or more), same-campus compatibility (+2 when another match exists), and matches across multiple categories (+2 for two categories or +5 for skills, interests, and goals together). The “For You” tab shows profiles with a score above zero. This is rule-based matching, not AI matching.
 
 ## Contract summary
 
