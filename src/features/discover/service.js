@@ -129,29 +129,52 @@ export const getMatches = async profile => {
         user.lookingFor
       )
 
+      const skillMatches = sharedLearn.length + sharedTeach.length
+      const hasSkillMatch = skillMatches > 0
+      const hasInterestMatch = sharedInterests.length > 0
+      const hasGoalMatch = sharedGoals.length > 0
+      const sameCampus = Boolean(
+        profile.campus && user.campus && profile.campus === user.campus
+      )
+      const matchedFactors = [
+        hasSkillMatch,
+        hasInterestMatch,
+        hasGoalMatch
+      ].filter(Boolean).length
+      const reciprocalSkillMatch = sharedLearn.length > 0 && sharedTeach.length > 0
+      const interestDepthBonus =
+        sharedInterests.length >= 3 ? 4 : sharedInterests.length === 2 ? 1 : 0
+      const campusBonus = sameCampus && matchedFactors > 0 ? 2 : 0
+      const multiFactorBonus =
+        matchedFactors >= 3 ? 5 : matchedFactors === 2 ? 2 : 0
+      const reciprocityBonus = reciprocalSkillMatch ? 5 : 0
+      const score =
+        skillMatches * 3 +
+        sharedInterests.length * 2 +
+        sharedGoals.length +
+        interestDepthBonus +
+        campusBonus +
+        multiFactorBonus +
+        reciprocityBonus
+
       const reasons = [
+        ...(reciprocalSkillMatch ? ['You can teach each other skills'] : []),
+        ...(sharedInterests.length >= 3 ? ['You share several interests'] : []),
+        ...(campusBonus ? ['You share a campus and other profile matches'] : []),
+        ...(multiFactorBonus ? ['Your profiles align across multiple areas'] : []),
         ...sharedLearn.map(
           x => `Can teach ${x}, which you want to learn`
         ),
-
         ...sharedTeach.map(
           x => `You can teach ${x}, which they want to learn`
         ),
-
         ...sharedInterests.map(
           x => `You both love ${x}`
         ),
-
         ...sharedGoals.map(
           x => `You are both looking for a ${x.replaceAll('_', ' ')}`
         )
       ]
-
-      const score =
-        sharedLearn.length * 3 +
-        sharedTeach.length * 3 +
-        sharedInterests.length * 2 +
-        sharedGoals.length
 
       return {
         user: clone(user),
